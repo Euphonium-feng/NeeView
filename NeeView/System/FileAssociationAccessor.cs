@@ -1,0 +1,88 @@
+﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using NeeView.Windows;
+using System.Windows.Media.Imaging;
+
+namespace NeeView
+{
+    public partial class FileAssociationAccessor : ObservableObject, IFileAssociation
+    {
+        private readonly FileAssociation _source;
+        private readonly FileAssociationIconBitmapCache _cache;
+        private bool _isEnabled;
+        private FileAssociationIcon _icon;
+        private IHasWindowHandle _window;
+
+
+        public FileAssociationAccessor(FileAssociation source, FileAssociationIconBitmapCache cache, IHasWindowHandle window)
+        {
+            _source = source;
+            _cache = cache;
+            _isEnabled = _source.IsEnabled;
+            _icon = _source.Icon;
+            _window = window;
+        }
+
+
+        public bool IsEnabled
+        {
+            get { return _isEnabled; }
+            set { SetProperty(ref _isEnabled, value); }
+        }
+
+        public bool IsDirty
+        {
+            get { return _isEnabled != _source.IsEnabled || _icon != _source.Icon; }
+        }
+
+        public FileAssociationCategory Category => _source.Category;
+
+        public string Extension => _source.Extension;
+
+        public string? Description => _source.Description;
+
+        public FileAssociationIcon Icon
+        {
+            get { return _icon; }
+            set
+            {
+                if (SetProperty(ref _icon, value))
+                {
+                    OnPropertyChanged(nameof(BitmapSource));
+                }
+            }
+        }
+
+        public BitmapSource? BitmapSource
+        {
+            get { return _cache.GetBitmapSource(_icon); }
+        }
+
+
+        [RelayCommand]
+        private void ChangeIcon()
+        {
+            var icon = FileAssociationTools.ShowIconDialog(_window.GetWindowHandle(), Icon);
+            if (icon is not null)
+            {
+                Icon = icon;
+            }
+        }
+
+        public bool Flush()
+        {
+            if (!IsDirty) return false;
+
+            _source.IsEnabled = _isEnabled;
+            _source.Icon = _icon;
+            return true;
+        }
+
+        public void InitializeValue()
+        {
+            IsEnabled = false;
+            Icon = new FileAssociationIcon(Category);
+        }
+
+    }
+}

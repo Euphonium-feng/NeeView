@@ -1,0 +1,52 @@
+﻿<UserControl x:Class="NeeView.Runtime.LayoutPanel.LayoutPanelContainer"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:b="http://schemas.microsoft.com/xaml/behaviors"
+             xmlns:nw="clr-namespace:NeeView.Windows"
+             xmlns:local="clr-namespace:NeeView.Runtime.LayoutPanel"
+             mc:Ignorable="d" 
+             d:DesignHeight="450" d:DesignWidth="800">
+
+    <UserControl.Resources>
+        <Style x:Key="ContextMenuItemStyle" TargetType="MenuItem">
+            <Setter Property="CommandTarget" Value="{Binding Path=PlacementTarget, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+        </Style>
+
+        <RoutedCommand x:Key="OpenWindowCommand" />
+        <RoutedCommand x:Key="ClosePanelCommand" />
+    </UserControl.Resources>
+
+    <UserControl.CommandBindings>
+        <CommandBinding x:Name="OpenWindow" Command="{StaticResource OpenWindowCommand}" Executed="OpenWindowCommand_Execute" />
+        <CommandBinding x:Name="ClosePanel" Command="{StaticResource ClosePanelCommand}" Executed="ClosePanelCommand_Execute" />
+    </UserControl.CommandBindings>
+    
+    <Grid Background="Transparent" Margin="0">
+        <Grid.Resources>
+            <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+        </Grid.Resources>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition />
+        </Grid.RowDefinitions>
+
+        <local:LayoutPanelHeader x:Name="Caption" Grid.Row="0" Cursor="Hand" Title="{Binding LayoutPanel.Title}" Focusable="False" IsTabStop="False"
+                ClosePanelCommand="{StaticResource ClosePanelCommand}">
+            <b:Interaction.Behaviors>
+                <nw:DragStartBehavior AllowedEffects="Move" DragDropData="{Binding LayoutPanel}" DragBegin="DragBegin" DragEnd="DragEnd" />
+            </b:Interaction.Behaviors>
+            <local:LayoutPanelHeader.ContextMenu>
+                <ContextMenu>
+                    <MenuItem x:Name="FloatingMenuItem" Style="{StaticResource ContextMenuItemStyle}" Header="Floating" Command="{StaticResource OpenWindowCommand}" />
+                    <MenuItem x:Name="DockingMenuItem" Style="{StaticResource ContextMenuItemStyle}" Header="Docking" IsEnabled="False" />
+                    <Separator />
+                    <MenuItem x:Name="CloseMenuItem" Style="{StaticResource ContextMenuItemStyle}" Header="Close" Command="{StaticResource ClosePanelCommand}" />
+                </ContextMenu>
+            </local:LayoutPanelHeader.ContextMenu>
+        </local:LayoutPanelHeader>
+
+        <ContentControl Grid.Row="1" Content="{Binding LayoutPanel.Content.Value}" Focusable="False" IsTabStop="False" />
+    </Grid>
+</UserControl>

@@ -1,0 +1,156 @@
+﻿//#define LOCAL_DEBUG
+
+using NeeLaboratory.Generators;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using System.Text.Json;
+using System.Threading;
+
+namespace NeeView
+{
+    /// <summary>
+    /// PlaylistSource のファイル操作
+    /// </summary>
+    [LocalDebug]
+    public static partial class PlaylistSourceTools
+    {
+        private static readonly SemaphoreSlim _semaphore = new(1, 1);
+
+
+        public static string? CreateTempPlaylist(IEnumerable<string> files)
+        {
+            if (files is null || !files.Any())
+            {
+                return null;
+            }
+
+            return CreateTmpPlaylist(files, Temporary.Current.TempDownloadDirectory);
+        }
+
+        private static string CreateTmpPlaylist(IEnumerable<string> files, string outputDirectory)
+        {
+            string name = DateTime.Now.ToString("yyyyMMddTHHmmss", CultureInfo.InvariantCulture) + PlaylistArchive.Extension;
+            string path = FileIO.CreateUniquePath(System.IO.Path.Combine(outputDirectory, name));
+            Save(new PlaylistSource(files), path, true, true);
+            return path;
+        }
+
+        public static void Save(this PlaylistSource playlist, string path, bool overwrite, bool createDirectory)
+        {
+            if (!overwrite && FileIO.FileExists(path))
+            {
+                throw new IOException($"Cannot overwrite: {path}");
+            }
+
+            _semaphore.Wait();
+            try
+            {
+                Debug.WriteLine($"Save: {path}");
+                playlist.Format = PlaylistSource.FormatVersion;
+                var json = JsonSerializer.SerializeToUtf8Bytes(playlist, UserSettingTools.GetSerializeOptions());
+
+                var directory = Path.GetDirectoryName(path);
+                if (directory is null) throw new IOException("Directory must not be null.");
+                if (!FileIO.DirectoryExists(directory))
+                {
+                    if (createDirectory)
+                    {
+                        Directory.CreateDirectory(directory);
+                    }
+                    else
+                    {
+                        throw new IOException($"Directory does not exist: {directory}");
+                    }
+                }
+
+                FileIO.WriteAllBytesDurable(path, json, null);
+            }
+            finally
+            {
+                _semaphore.Release();
+            }
+        }
+
+        public static PlaylistSource Load(string path)
+        {
+            _semaphore.Wait();
+            try
+            {
+                Debug.WriteLine($"Load: {path}");
+                var json = FileIO.ReadAllBytesShared(path);
+                return Deserialize(json);
+            }
+            finally
+            {
+                _semaphore.Release();
+            }
+        }
+
+        private static PlaylistSource Deserialize(byte[] json)
+        {
+            var fileHeader = JsonSerializer.Deserialize<PlaylistFileHeader>(json, UserSettingTools.GetDeserializeOptions());
+
+#pragma warning disable CS0612, CS0618 // 型またはメンバーが旧型式です
+            if (fileHeader?.Format != null && fileHeader.Format.Name == PlaylistSourceV1.FormatVersion)
+            {
+                var playlistV1 = JsonSerializer.Deserialize<PlaylistSourceV1>(json, UserSettingTools.GetDeserializeOptions());
+                if (playlistV1 is null) throw new FormatException();
+                return playlistV1.ToPlaylist().Validate();
+            }
+#pragma warning restore CS0612, CS0618 // 型またはメンバーが旧型式です
+
+            else
+            {
+                var playlistSource = JsonSerializer.Deserialize<PlaylistSource>(json, UserSettingTools.GetDeserializeOptions());
+                if (playlistSource is null) throw new FormatException();
+                return playlistSource.Validate();
+            }
+        }
+
+        private class PlaylistFileHeader
+        {
+            public FormatVersion? Format { get; set; }
+        }
+
+        /// <summary>
+        /// プレイリストを FileResolver に登録
+        /// </summary>
+        /// <param name="path">プレイリストファイル</param>
+        public static void AddToFileResolver(string path)
+        {
+            using (ProcessLock.Lock())
+            {
+                var playlist = Load(path);
+
+                // Ver 2.0.1 より古いプレイリストのみ処理する
+                if (playlist.Format.CompareTo(new FormatVersion(PlaylistSource.FormatName, VersionNumber.Playlist2_0_1)) < 0)
+                {
+                    playlist.AddToFileResolver();
+                    playlist.Save(path, true, false);
+                }
+            }
+        }
+
+        /// <summary>
+        /// プレイリスト項目のパスの復元と読み込み
+        /// </summary>
+        /// <param name="path"></param>
+        public static PlaylistSource LoadFileResolved(string path)
+        {
+            using (ProcessLock.Lock())
+            {
+                var playlist = Load(path);
+                if (playlist.ResolveFilePath())
+                {
+                    playlist.Save(path, true, false);
+                }
+                return playlist;
+            }
+        }
+    }
+
+}

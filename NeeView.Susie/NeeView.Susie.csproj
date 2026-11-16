@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="..\NeeView.props" />
+  
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Platforms>AnyCPU;x64;x86</Platforms>
+    <Nullable>enable</Nullable>
+    <IsTrimmable>true</IsTrimmable>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <Description>NeeView SusiePlugin interface</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\NeeLaboratory.Remote\NeeLaboratory.Remote.csproj" />
+  </ItemGroup>
+
+</Project>

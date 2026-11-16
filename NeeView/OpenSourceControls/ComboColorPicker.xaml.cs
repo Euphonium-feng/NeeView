@@ -1,0 +1,290 @@
+﻿using NeeView.Effects;
+using NeeView.Properties;
+using System;
+using System.Globalization;
+using System.Reflection;
+using System.Text;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+
+namespace OpenSourceControls
+{
+    /// <summary>
+    /// ComboColorPicker user control
+    /// This code is open source published with the Code Project Open License (CPOL).
+    ///
+    /// Originally written by Øystein Bjørke, March 2009.
+    /// 
+    /// The code and accompanying article can be found at http://www.codeproject.com
+    /// </summary>
+
+    public partial class ComboColorPicker : UserControl
+    {
+        private bool _hasDefaultColor;
+        private ColorViewModel? _customColor;
+
+        // Todo: should this be disposed somewhere?
+
+        public ComboColorPicker()
+        {
+            InitializeComponent();
+
+            InitializeColors();
+        }
+
+        #region Events
+        public static readonly RoutedEvent ColorChangedEvent =
+            EventManager.RegisterRoutedEvent("ColorChanged", RoutingStrategy.Bubble,
+                typeof(RoutedPropertyChangedEventHandler<Color>), typeof(ComboColorPicker));
+
+        public event RoutedPropertyChangedEventHandler<Color> ColorChanged
+        {
+            add { AddHandler(ColorChangedEvent, value); }
+            remove { RemoveHandler(ColorChangedEvent, value); }
+        }
+
+        protected virtual void OnColorChanged(Color oldValue, Color newValue)
+        {
+            var args = new RoutedPropertyChangedEventArgs<Color>(oldValue, newValue);
+            args.RoutedEvent = ComboColorPicker.ColorChangedEvent;
+            RaiseEvent(args);
+        }
+        #endregion
+
+        #region Dependency properties
+        public Color SelectedColor
+        {
+            get { return (Color)GetValue(SelectedColorProperty); }
+            set { SetValue(SelectedColorProperty, value); }
+        }
+
+        public static readonly DependencyProperty SelectedColorProperty =
+            DependencyProperty.Register("SelectedColor", typeof(Color), typeof(ComboColorPicker),
+            new FrameworkPropertyMetadata(OnSelectedColorChanged));
+
+        private static void OnSelectedColorChanged(DependencyObject obj, DependencyPropertyChangedEventArgs args)
+        {
+            ComboColorPicker cp = obj as ComboColorPicker ?? throw new InvalidOperationException();
+
+            Color newColor = (Color)args.NewValue;
+            Color oldColor = (Color)args.OldValue;
+
+            if (newColor == oldColor)
+                return;
+
+            // When the SelectedColor changes, set the selected value of the combo box
+            if (cp.ColorList1.SelectedValue is not ColorViewModel selectedColorViewModel || selectedColorViewModel.Color != newColor)
+            {
+                // Add the color if not found
+                if (!cp.ListContains(newColor))
+                {
+                    if (cp.UseCustomColor)
+                    {
+                        cp.SetCustomColor(newColor);
+                    }
+                    else
+                    {
+                        cp.AddColor(newColor, newColor.ToString(CultureInfo.InvariantCulture));
+                    }
+                }
+            }
+
+            // Also update the brush
+            cp.SelectedBrush = new SolidColorBrush(newColor);
+            cp.OnColorChanged(oldColor, newColor);
+        }
+
+        private bool ListContains(Color newColor)
+        {
+            foreach (object o in ColorList1.Items)
+            {
+                if (o is not ColorViewModel vcm) continue;
+                if (vcm.Color == newColor) return true;
+            }
+            return false;
+        }
+
+        public Brush SelectedBrush
+        {
+            get { return (Brush)GetValue(SelectedBrushProperty); }
+            set { SetValue(SelectedBrushProperty, value); }
+        }
+
+        // Using a DependencyProperty as the backing store for SelectedBrush.  This enables animation, styling, binding, etc...
+        public static readonly DependencyProperty SelectedBrushProperty =
+            DependencyProperty.Register("SelectedBrush", typeof(Brush), typeof(ComboColorPicker),
+            new FrameworkPropertyMetadata(OnSelectedBrushChanged));
+
+        private static void OnSelectedBrushChanged(DependencyObject obj, DependencyPropertyChangedEventArgs args)
+        {
+            // Debug.WriteLine("OnSelectedBrushChanged");
+            ComboColorPicker cp = (ComboColorPicker)obj;
+            SolidColorBrush newBrush = (SolidColorBrush)args.NewValue;
+            // SolidColorBrush oldBrush = (SolidColorBrush)args.OldValue;
+
+            if (cp.SelectedColor != newBrush.Color)
+                cp.SelectedColor = newBrush.Color;
+        }
+
+        public Color? DefaultColor
+        {
+            get { return (Color?)GetValue(DefaultColorProperty); }
+            set { SetValue(DefaultColorProperty, value); }
+        }
+
+        // Using a DependencyProperty as the backing store for DefaultColor.  This enables animation, styling, binding, etc...
+        public static readonly DependencyProperty DefaultColorProperty =
+            DependencyProperty.Register(nameof(DefaultColor), typeof(Color?), typeof(ComboColorPicker), new PropertyMetadata(null, OnDefaultColorChanged));
+
+        private static void OnDefaultColorChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            if (d is not ComboColorPicker cp) return;
+            var defaultColor = (Color?)e.NewValue;
+            cp.SetDefaultColor(defaultColor);
+        }
+
+        public bool UseCustomColor
+        {
+            get { return (bool)GetValue(UseCustomColorProperty); }
+            set { SetValue(UseCustomColorProperty, value); }
+        }
+
+        public static readonly DependencyProperty UseCustomColorProperty =
+            DependencyProperty.Register(nameof(UseCustomColor), typeof(bool), typeof(ComboColorPicker), new PropertyMetadata(false));
+
+
+        #endregion
+
+        public static Brush CheckerBrush { get; } = BrushTools.Check4x4Brush;
+
+
+        public void InitializeColors()
+        {
+            ColorList1.Items.Clear();
+
+            // Add some common colors
+            AddColor(Colors.Black, "Black");
+            AddColor(Colors.Gray, "Gray");
+            AddColor(Colors.LightGray, "LightGray");
+            AddColor(Colors.White, "White");
+            AddColor(Colors.Transparent, "Transparent");
+            AddColor(Colors.Red, "Red");
+            AddColor(Colors.Green, "Green");
+            AddColor(Colors.Blue, "Blue");
+            AddColor(Colors.Cyan, "Cyan");
+            AddColor(Colors.Magenta, "Magenta");
+            AddColor(Colors.Yellow, "Yellow");
+            AddColor(Colors.Purple, "Purple");
+            AddColor(Colors.Orange, "Orange");
+            AddColor(Colors.Brown, "Brown");
+
+            // And some colors with transparency
+            AddColor(Color.FromArgb(128, 0, 0, 0), "Black 50%");
+            AddColor(Color.FromArgb(128, 128, 128, 128), "Gray 50%");
+            AddColor(Color.FromArgb(128, 255, 255, 255), "White 50%");
+            AddColor(Color.FromArgb(128, 255, 0, 0), "Red 50%");
+            AddColor(Color.FromArgb(128, 0, 255, 0), "Green 50%");
+            AddColor(Color.FromArgb(128, 0, 0, 255), "Blue 50%");
+            ColorList1.Items.Add(new SeparatorWithColorProperty());
+
+            // Enumerate constant colors from the Colors class
+            Type colorsType = typeof(Colors);
+            PropertyInfo[] pis = colorsType.GetProperties();
+            foreach (PropertyInfo pi in pis)
+            {
+                var color = pi.GetValue(null, null);
+                if (color is null) throw new InvalidOperationException();
+                AddColor((Color)color, pi.Name);
+            }
+
+            // todo: does this work?
+            ColorList1.SelectedValuePath = "Color";
+        }
+
+        private void SetDefaultColor(Color? defaultColor)
+        {
+            if (defaultColor == null) return;
+
+            var cvm = new ColorViewModel() { Color = defaultColor.Value, Name = TextResources.GetString("ColorPalette.Default") };
+
+            if (_hasDefaultColor)
+            {
+                ColorList1.Items[0] = cvm;
+            }
+            else
+            {
+                ColorList1.Items.Insert(0, cvm);
+                ColorList1.Items.Insert(1, new SeparatorWithColorProperty());
+                _hasDefaultColor = true;
+            }
+
+            if (SelectedColor == defaultColor)
+            {
+                ColorList1.SelectedItem = cvm;
+            }
+        }
+
+        private void SetCustomColor(Color color)
+        {
+            if (_customColor is null)
+            {
+                ColorList1.Items.Add(new SeparatorWithColorProperty());
+            }
+            else
+            {
+                ColorList1.Items.Remove(_customColor);
+            }
+            _customColor = new ColorViewModel() { Color = color, Name = TextResources.GetString("ColorPalette.Custom") };
+            ColorList1.Items.Add(_customColor);
+        }
+
+        private ColorViewModel AddColor(Color color, string name)
+        {
+            if (!name.StartsWith("#", StringComparison.Ordinal))
+                name = NiceName(name);
+            var cvm = new ColorViewModel() { Color = color, Name = name };
+            ColorList1.Items.Add(cvm);
+            return cvm;
+        }
+
+        private static string NiceName(string name)
+        {
+            var sb = new StringBuilder();
+            for (int i = 0; i < name.Length; i++)
+            {
+                if (i > 0 && char.IsUpper(name[i]))
+                    sb.Append(' ');
+                sb.Append(name[i]);
+            }
+            return sb.ToString();
+        }
+    }
+
+
+    public class ColorViewModel
+    {
+        public Color Color { get; set; }
+        public Brush Brush { get { return new SolidColorBrush(Color); } }
+        public string? Name { get; set; }
+    }
+
+
+    /// <summary>
+    /// Bind 警告回避するためだけの専用 Separator
+    /// </summary>
+    /// <remarks>
+    /// Color バインド警告が回避できないのでダミーのプロパティを実装することで対処
+    /// </remarks>
+    public class SeparatorWithColorProperty : Separator
+    {
+        public Color Color
+        {
+            get { return (Color)GetValue(ColorProperty); }
+            set { SetValue(ColorProperty, value); }
+        }
+
+        public static readonly DependencyProperty ColorProperty =
+            DependencyProperty.Register("Color", typeof(Color), typeof(SeparatorWithColorProperty), new PropertyMetadata(Colors.Transparent));
+    }
+}

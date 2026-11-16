@@ -1,0 +1,12 @@
+{
+  "PackageType": "Dev",
+  "Revision": "12345678",
+  "SelfContained": false,
+  "UseLocalApplicationData": false,
+  "TemporaryFilesInProfileFolder": false,
+  "TrimSaveData": true,
+  "PathProcessGroup": true,
+  "SoftwareRendering": false,
+  "Watermark": true,
+  "LogFile": null
+}

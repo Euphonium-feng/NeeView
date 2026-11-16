@@ -1,0 +1,178 @@
+﻿using CommunityToolkit.Mvvm.ComponentModel;
+using Generator.Equals;
+using NeeView.Windows.Property;
+using System;
+using System.Text.Json.Serialization;
+
+namespace NeeView
+{
+    [Equatable(Explicit = true, IgnoreInheritedMembers = true)]
+    public partial class FilmStripConfig : ObservableObject
+    {
+        [DefaultEquality] private bool _isEnabled;
+        [DefaultEquality] private bool _isHideFilmStrip;
+        [DefaultEquality] private bool _isHideFilmStripInAutoHideMode = true;
+        [DefaultEquality] private double _imageWidth = 96.0;
+        [DefaultEquality] private bool _isVisibleNumber;
+        [DefaultEquality] private bool _isSelectedCenter;
+        [DefaultEquality] private bool _isManipulationBoundaryFeedbackEnabled = true;
+        [DefaultEquality] private bool _isVisiblePlaylistMark;
+        [DefaultEquality] private FilmStripMouseWheelAction _mouseWheelAction = FilmStripMouseWheelAction.MoveSelection;
+        [DefaultEquality] private bool _isDetailPopupEnabled = true;
+
+
+        /// <summary>
+        /// フィルムストリップ表示
+        /// </summary>
+        [PropertyMember]
+        public bool IsEnabled
+        {
+            get { return _isEnabled; }
+            set { SetProperty(ref _isEnabled, value); }
+        }
+
+        /// <summary>
+        /// フィルムストリップ自動的に隠す 
+        /// </summary>
+        [PropertyMember]
+        public bool IsHideFilmStrip
+        {
+            get { return _isHideFilmStrip; }
+            set { SetProperty(ref _isHideFilmStrip, value); }
+        }
+
+        /// <summary>
+        /// フィルムストリップ自動的に隠す (自動非表示モード)
+        /// </summary>
+        [PropertyMember]
+        public bool IsHideFilmStripInAutoHideMode
+        {
+            get { return _isHideFilmStripInAutoHideMode; }
+            set { SetProperty(ref _isHideFilmStripInAutoHideMode, value); }
+        }
+
+        /// <summary>
+        /// サムネイルサイズ
+        /// </summary>
+        [PropertyRange(32, 512, TickFrequency = 8, IsEditable = true, Format = "{0} × {0}")]
+        public double ImageWidth
+        {
+            get { return _imageWidth; }
+            set { SetProperty(ref _imageWidth, AppMath.Round(Math.Max(value, 32))); }
+        }
+
+        /// <summary>
+        /// プレイリストマーク表示
+        /// </summary>
+        [PropertyMember]
+        public bool IsVisiblePlaylistMark
+        {
+            get { return _isVisiblePlaylistMark; }
+            set { SetProperty(ref _isVisiblePlaylistMark, value); }
+        }
+
+        /// <summary>
+        /// ページ番号の表示
+        /// </summary>
+        [PropertyMember]
+        public bool IsVisibleNumber
+        {
+            get { return _isVisibleNumber; }
+            set { SetProperty(ref _isVisibleNumber, value); }
+        }
+
+        /// <summary>
+        /// スクロールビュータッチ操作の終端挙動
+        /// </summary>
+        [PropertyMember]
+        public bool IsManipulationBoundaryFeedbackEnabled
+        {
+            get { return _isManipulationBoundaryFeedbackEnabled; }
+            set { SetProperty(ref _isManipulationBoundaryFeedbackEnabled, value); }
+        }
+
+        /// <summary>
+        /// 選択した項目が中央に表示されるようにスクロールする
+        /// </summary>
+        [PropertyMember]
+        public bool IsSelectedCenter
+        {
+            get { return _isSelectedCenter; }
+            set { SetProperty(ref _isSelectedCenter, value); }
+        }
+
+        /// <summary>
+        /// マウスホイール挙動
+        /// </summary>
+        [PropertyMember]
+        public FilmStripMouseWheelAction MouseWheelAction
+        {
+            get { return _mouseWheelAction; }
+            set { SetProperty(ref _mouseWheelAction, value); }
+        }
+
+        /// <summary>
+        /// 詳細ポップアップ
+        /// </summary>
+        [PropertyMember]
+        public bool IsDetailPopupEnabled
+        {
+            get { return _isDetailPopupEnabled; }
+            set { SetProperty(ref _isDetailPopupEnabled, value); }
+        }
+
+
+        #region Obsolete
+
+        [Obsolete("no used"), Alternative(null, 39)] // ver.39
+        [JsonIgnore]
+        public bool IsVisiblePlate
+        {
+            get { return false; }
+            set { }
+        }
+
+        [Obsolete("no used"), Alternative(nameof(ImageWidth), 39)] // ver.39
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public double ThumbnailSize
+        {
+            get { return 0.0; }
+            set { ImageWidth = (int)value; }
+        }
+
+        /// <summary>
+        /// ホイール操作でページ移動
+        /// </summary>
+        [Obsolete, Alternative(nameof(MouseWheelAction), 46, ScriptErrorLevel.Warning)] // v46.0
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWriting)]
+        public bool IsWheelMovePage
+        {
+            get { return MouseWheelAction == FilmStripMouseWheelAction.MovePage; }
+            set { MouseWheelAction = value ? FilmStripMouseWheelAction.MovePage : FilmStripMouseWheelAction.MoveSelection; }
+        }
+
+        #endregion
+    }
+
+
+    public enum FilmStripMouseWheelAction
+    {
+        /// <summary>
+        /// 選択移動
+        /// </summary>
+        MoveSelection,
+
+        /// <summary>
+        /// ページ移動
+        /// </summary>
+        MovePage,
+
+        /// <summary>
+        /// コマンド依存
+        /// </summary>
+        CommandDependent,
+    }
+}
+
+
+

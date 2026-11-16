@@ -1,0 +1,8 @@
+﻿// @name Open with MS Paint
+// @description Execute external application commands by specifying the path and argument format of the executable file.
+
+param = {
+    "Command": "mspaint.exe",
+    "Parameter": "\"$File\""
+}
+nv.Command.OpenExternalApp.Patch(param).Execute()

@@ -1,0 +1,326 @@
+﻿//#define LOCAL_DEBUG
+
+using NeeLaboratory.ComponentModel;
+using NeeLaboratory.Generators;
+using NeeView.Properties;
+using NeeView.Threading;
+using System;
+using System.Collections.Specialized;
+using System.ComponentModel;
+using System.IO;
+
+namespace NeeView
+{
+    /// <summary>
+    /// ブックマーク、ページマークは変更のたびに保存。
+    /// 他プロセスからの要求でリロードを行う。
+    /// </summary>
+    [LocalDebug]
+    public partial class SaveDataSync : IDisposable
+    {
+        // Note: Initialize()必須
+        static SaveDataSync() => Current = new SaveDataSync();
+        public static SaveDataSync Current { get; }
+
+
+        private readonly DelayAction _delaySaveBookmark;
+        private readonly IntervalAction _delaySaveHistory;
+        private readonly DelayAction _delaySaveFolderConfig;
+        private readonly DelayAction _delaySaveQuickAccess;
+        private readonly UserSettingWatcher _userSettingWatcher = new UserSettingWatcher();
+        private readonly BookmarkWatcher _bookmarkWatcher = new BookmarkWatcher();
+        private readonly PlaylistWatcher _playlistWatcher = new PlaylistWatcher();
+        private readonly FolderConfigWatcher _folderConfigWatcher = new FolderConfigWatcher();
+        private readonly QuickAccessWatcher _quickAccessWatcher = new QuickAccessWatcher();
+        private readonly DisposableCollection _disposables = new();
+        private bool _disposedValue = false;
+
+        private SaveDataSync()
+        {
+            _delaySaveBookmark = new DelayAction(() => SaveBookmark(true), TimeSpan.FromSeconds(0.5));
+            _delaySaveHistory = new IntervalAction(() => SaveHistory(true), TimeSpan.FromMinutes(5.0));
+            _delaySaveFolderConfig = new DelayAction(() => SaveFolderConfig(true), TimeSpan.FromSeconds(5.0));
+            _delaySaveQuickAccess = new DelayAction(() => SaveQuickAccess(true), TimeSpan.FromSeconds(0.5));
+        }
+
+
+        public void Initialize()
+        {
+            _disposables.Add(BookmarkCollection.Current.SubscribeBookmarkChanged(BookmarkCollection_BookmarkChanged));
+            _disposables.Add(BookmarkCollection.Current.SubscribeValidated(BookmarkCollection_Validated));
+            _disposables.Add(QuickAccessCollection.Current.SubscribeRoutedValuePropertyChanged(QuickAccessCollection_RoutedValuePropertyChanged));
+            _disposables.Add(QuickAccessCollection.Current.SubscribeRoutedCollectionChanged(QuickAccessCollection_RoutedCollectionChanged));
+            _disposables.Add(BookHistoryCollection.Current.SubscribeHistoryChanged(BookHistoryCollection_HistoryChanged));
+            _disposables.Add(BookHistoryCollection.Current.SubscribeSearchChanged(BookHistoryCollection_SearchChanged));
+            _disposables.Add(Config.Current.Bookmark.SubscribePropertyChanged(nameof(BookmarkConfig.BookmarkFilePath), BookmarkConfig_BookmarkFilePathChanged));
+            _disposables.Add(FolderConfigCollection.Current.SubscribeFolderChanged(FolderConfigCollection_FolderChanged));
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!_disposedValue)
+            {
+                if (disposing)
+                {
+                    _quickAccessWatcher.Dispose();
+                    _folderConfigWatcher.Dispose();
+                    _playlistWatcher.Dispose();
+                    _bookmarkWatcher.Dispose();
+                    _userSettingWatcher.Dispose();
+                    _disposables.Dispose();
+                    _delaySaveBookmark.Dispose();
+                    _delaySaveHistory.Dispose();
+                    _delaySaveFolderConfig.Dispose();
+                    _delaySaveQuickAccess.Dispose();
+                }
+                _disposedValue = true;
+            }
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        public void Suspend()
+        {
+            if (_disposedValue) return;
+
+            _userSettingWatcher.Suspend();
+            _bookmarkWatcher.Suspend();
+            _playlistWatcher.Suspend();
+            _folderConfigWatcher.Suspend();
+            _quickAccessWatcher.Suspend();
+        }
+
+        public void Resume()
+        {
+            if (_disposedValue) return;
+
+            _userSettingWatcher.Resume();
+            _bookmarkWatcher.Resume();
+            _playlistWatcher.Resume();
+            _folderConfigWatcher.Resume();
+            _quickAccessWatcher.Resume();
+        }
+
+        public void DisposeWatcher()
+        {
+            _quickAccessWatcher.Dispose();
+            _folderConfigWatcher.Dispose();
+            _playlistWatcher.Dispose();
+            _bookmarkWatcher.Dispose();
+            _userSettingWatcher.Dispose();
+        }
+
+        private void QuickAccessCollection_RoutedValuePropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            LocalDebug.WriteLine($"PropertyName={e.PropertyName}");
+            _delaySaveQuickAccess.Request();
+        }
+
+        private void QuickAccessCollection_RoutedCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            LocalDebug.WriteLine($"Action={e.Action}");
+            if (e.Action == NotifyCollectionChangedAction.Reset) return;
+            _delaySaveQuickAccess.Request();
+        }
+
+        private void BookmarkCollection_BookmarkChanged(object? sender, BookmarkCollectionChangedEventArgs e)
+        {
+            LocalDebug.WriteLine($"Action={e.Action}");
+            if (e.Action == EntryCollectionChangedAction.Reset) return;
+            _delaySaveBookmark.Request();
+        }
+
+        private void BookmarkCollection_Validated(object? sender, EventArgs e)
+        {
+            LocalDebug.WriteLine($"Validated");
+            _delaySaveBookmark.Request();
+        }
+
+        private void BookHistoryCollection_HistoryChanged(object? sender, BookMementoCollectionChangedArgs e)
+        {
+            if (e.HistoryChangedType == BookMementoCollectionChangedType.Load) return;
+            LocalDebug.WriteLine($"");
+            _delaySaveHistory.Request();
+        }
+
+        private void BookHistoryCollection_SearchChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (e.Action == NotifyCollectionChangedAction.Reset) return;
+            LocalDebug.WriteLine($"Sender={sender}, Action={e.Action}");
+            _delaySaveHistory.Request();
+        }
+
+        private void BookmarkConfig_BookmarkFilePathChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            LocalDebug.WriteLine($"");
+            _bookmarkWatcher.Reload();
+        }
+
+        private void FolderConfigCollection_FolderChanged(object? sender, FolderConfigChangedEventArgs e)
+        {
+            LocalDebug.WriteLine($"{e.Action}: {e.FolderConfig?.Place}");
+            switch (e.Action)
+            {
+                case FolderConfigChangedAction.Add:
+                    if (e.FolderConfig?.IsDefault() == true)
+                    {
+                        LocalDebug.WriteLine($"Skip (default)");
+                        return;
+                    }
+                    break;
+            }
+
+            _delaySaveFolderConfig.Request();
+        }
+
+        public void Flush()
+        {
+            if (_disposedValue) return;
+
+            _delaySaveBookmark.Flush();
+            _delaySaveHistory.Flush();
+            _delaySaveFolderConfig.Flush();
+            _delaySaveQuickAccess.Flush();
+            PlaylistHub.Current.Flush();
+        }
+
+        public void SaveUserSetting(bool handleException)
+        {
+            if (_disposedValue) return;
+
+            LocalDebug.WriteLine($"Save UserSetting");
+
+            try
+            {
+                SaveData.Current.SaveUserSetting();
+            }
+            catch (Exception ex)
+            {
+                HandleSaveFailedException(ex, handleException, TextResources.GetString("Word.Settings"));
+            }
+        }
+
+        public void SaveHistory(bool handleException)
+        {
+            if (_disposedValue) return;
+
+            LocalDebug.WriteLine($"Save History");
+
+            try
+            {
+                _delaySaveHistory.Cancel();
+                SaveData.Current.SaveHistory();
+            }
+            catch (Exception ex)
+            {
+                HandleSaveFailedException(ex, handleException, TextResources.GetString("Word.History"));
+            }
+        }
+
+        public void SaveBookmark(bool handleException)
+        {
+            if (_disposedValue) return;
+
+            LocalDebug.WriteLine($"Save Bookmark");
+
+            try
+            {
+                _delaySaveBookmark?.Cancel();
+                SaveData.Current.SaveBookmark();
+                _bookmarkWatcher.Reset();
+            }
+            catch (Exception ex)
+            {
+                HandleSaveFailedException(ex, handleException, TextResources.GetString("Word.Bookmark"));
+            }
+        }
+
+        public void SaveFolderConfig(bool handleException)
+        {
+            if (_disposedValue) return;
+
+            LocalDebug.WriteLine($"Save FolderConfig");
+
+            try
+            {
+                _delaySaveFolderConfig?.Cancel();
+                SaveData.Current.SaveFolderConfig();
+                _folderConfigWatcher.Reset();
+            }
+            catch (Exception ex)
+            {
+                HandleSaveFailedException(ex, handleException, TextResources.GetString("Word.FolderConfig"));
+            }
+        }
+
+        public void SaveQuickAccess(bool handleException)
+        {
+            if (_disposedValue) return;
+
+            LocalDebug.WriteLine($"Save QuickAccess");
+
+            try
+            {
+                _delaySaveQuickAccess?.Cancel();
+                SaveData.Current.SaveQuickAccess();
+                _quickAccessWatcher.Reset();
+            }
+            catch (Exception ex)
+            {
+                HandleSaveFailedException(ex, handleException, TextResources.GetString("Word.QuickAccess"));
+            }
+        }
+
+        private static void HandleSaveFailedException(Exception ex, bool handleException, string arg)
+        {
+            var caption = TextResources.GetFormatString("Notice.FailedToSave", arg);
+            var message = ex.Message;
+            if (handleException)
+            {
+                ToastService.Current.Show(new Toast(message, caption, ToastIcon.Error));
+            }
+            else
+            {
+                throw new IOException(caption + System.Environment.NewLine + message, ex);
+            }
+        }
+
+        private static void RemoveHistoryIfNotSave()
+        {
+            SaveData.Current.DeleteHistoryIfNotSave();
+        }
+
+        private static void RemoveBookmarkIfNotSave()
+        {
+            SaveData.Current.DeleteBookmarkIfNotSave();
+        }
+
+        /// <summary>
+        /// すべてのセーブ処理を行う
+        /// </summary>
+        public void SaveAll(bool handleException)
+        {
+            if (_disposedValue) return;
+
+            Flush();
+            SaveUserSetting(handleException);
+
+            RemoveHistoryIfNotSave();
+            RemoveBookmarkIfNotSave();
+        }
+
+        public void ResetWatcher()
+        {
+            if (_disposedValue) return;
+
+            _bookmarkWatcher.Reset();
+            _playlistWatcher.Reset();
+            _folderConfigWatcher.Reset();
+            _quickAccessWatcher.Reset();
+        }
+    }
+}

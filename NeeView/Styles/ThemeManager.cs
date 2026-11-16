@@ -1,0 +1,280 @@
+﻿using CommunityToolkit.Mvvm.ComponentModel;
+using NeeLaboratory.Collection;
+using NeeLaboratory.ComponentModel;
+using NeeView.Properties;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Windows;
+using System.Windows.Media;
+
+namespace NeeView
+{
+    public class ThemeManager : ObservableObject
+    {
+        static ThemeManager() => Current = new ThemeManager();
+        public static ThemeManager Current { get; }
+
+        private const string _themeProtocolHeader = "themes://";
+
+        private static readonly string _darkThemeContentPath = "Libraries/Themes/DarkTheme.json";
+        private static readonly string _darkMonochromeThemeContentPath = "Libraries/Themes/DarkMonochromeTheme.json";
+        private static readonly string _lightThemeContentPath = "Libraries/Themes/LightTheme.json";
+        private static readonly string _lightMonochromeThemeContentPath = "Libraries/Themes/LightMonochromeTheme.json";
+        private static readonly string _highContrastThemeContentPath = "Libraries/Themes/HighContrastTheme.json";
+        private static readonly string _customThemeTemplateContentPath = "Libraries/Themes/CustomThemeTemplate.json";
+
+        private ThemeProfile? _themeProfile;
+
+
+        private ThemeManager()
+        {
+            RefreshThemeColor();
+
+            Config.Current.Theme.SubscribePropertyChanged(nameof(ThemeConfig.ThemeType),
+                (s, e) => RefreshThemeColor());
+
+            SystemVisualParameters.Current.SubscribePropertyChanged(nameof(SystemVisualParameters.IsHighContrast),
+                (s, e) => RefreshThemeColor());
+
+            SystemVisualParameters.Current.SubscribePropertyChanged(nameof(SystemVisualParameters.Theme),
+                (s, e) => RefreshThemeColor());
+
+            SystemVisualParameters.Current.SubscribePropertyChanged(nameof(SystemVisualParameters.AccentColor),
+                (s, e) => RefreshThemeColor());
+        }
+
+
+        public event EventHandler? ThemeProfileChanged;
+
+
+        public ThemeProfile? ThemeProfile
+        {
+            get { return _themeProfile; }
+            private set { SetProperty(ref _themeProfile, value); }
+        }
+
+
+        public static KeyValuePairList<string, string> CreateItemsMap()
+        {
+            var defaultThemes = Enum.GetValues(typeof(ThemeType))
+                .Cast<ThemeType>()
+                .Where(e => e != ThemeType.Custom)
+                .Select(e => new KeyValuePair<string, string>(e.ToString(), e.ToAliasName()));
+
+            var customThemes = CollectCustomThemes()
+                .Select(e => new KeyValuePair<string, string>(e.ToString(), Path.GetFileNameWithoutExtension(e.CustomThemeFilePath)));
+
+            var map = defaultThemes.Concat(customThemes)
+                .ToKeyValuePairList(e => e.Key, e => e.Value);
+
+            return map;
+        }
+
+        public static List<ThemeSource> CollectCustomThemes()
+        {
+            if (!string.IsNullOrEmpty(Config.Current.Theme.CustomThemeFolder))
+            {
+                try
+                {
+                    var directory = new DirectoryInfo(Config.Current.Theme.CustomThemeFolder);
+                    if (FileIO.Exists(directory))
+                    {
+                        return directory.GetFiles("*.json").Select(e => new ThemeSource(ThemeType.Custom, e.Name)).ToList();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine(ex.Message);
+                }
+            }
+
+            return new List<ThemeSource>();
+        }
+
+
+
+        public void RefreshThemeColor()
+        {
+            var themeProfile = GeThemeProfile(Config.Current.Theme.ThemeType);
+
+            foreach (var key in ThemeProfile.Keys)
+            {
+                App.Current.Resources[key] = new SolidColorBrush(themeProfile.GetColor(key, 1.0));
+            }
+
+            // special theme color
+            App.Current.Resources["BottomBar.Background.Color"] = themeProfile.GetColor("BottomBar.Background", 1.0);
+
+            // window border thickness
+            App.Current.Resources["Window.BorderThickness"] = themeProfile.GetColor("Window.Border", 1.0).A > 0x00 ? new Thickness(1.0) : default;
+
+            // dialog border thickness
+            App.Current.Resources["Window.Dialog.BorderThickness"] = themeProfile.GetColor("Window.Dialog.Border", 1.0).A > 0x00 ? new Thickness(1.0) : default;
+
+            if (themeProfile.GetColor("Button.Background", 1.0).A > 0x00)
+            {
+                App.Current.Resources["Button.Accent.Background"] = new SolidColorBrush(themeProfile.GetColor("Control.Accent", 1.0));
+                App.Current.Resources["Button.Accent.Foreground"] = new SolidColorBrush(themeProfile.GetColor("Control.AccentText", 1.0));
+                App.Current.Resources["Button.Accent.Border"] = new SolidColorBrush(themeProfile.GetColor("Control.Accent", 1.0));
+
+                App.Current.Resources["Button.Danger.Background"] = new SolidColorBrush(themeProfile.GetColor("Control.Danger", 1.0));
+                App.Current.Resources["Button.Danger.Foreground"] = new SolidColorBrush(themeProfile.GetColor("Control.DangerText", 1.0));
+                App.Current.Resources["Button.Danger.Border"] = new SolidColorBrush(themeProfile.GetColor("Control.Danger", 1.0));
+            }
+            else
+            {
+                App.Current.Resources["Button.Accent.Background"] = new SolidColorBrush(themeProfile.GetColor("Button.Background", 1.0));
+                App.Current.Resources["Button.Accent.Foreground"] = new SolidColorBrush(themeProfile.GetColor("Button.Foreground", 1.0));
+                App.Current.Resources["Button.Accent.Border"] = new SolidColorBrush(themeProfile.GetColor("Control.Accent", 1.0));
+
+                App.Current.Resources["Button.Danger.Background"] = new SolidColorBrush(themeProfile.GetColor("Button.Background", 1.0));
+                App.Current.Resources["Button.Danger.Foreground"] = new SolidColorBrush(themeProfile.GetColor("Button.Foreground", 1.0));
+                App.Current.Resources["Button.Danger.Border"] = new SolidColorBrush(themeProfile.GetColor("Control.Danger", 1.0));
+            }
+
+            ThemeProfile = themeProfile;
+            ThemeProfileChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+
+        private ThemeProfile GeThemeProfile(ThemeSource themeId)
+        {
+            try
+            {
+                var themeProfile = LoadThemeProfile(themeId);
+                themeProfile.Verify();
+                return themeProfile.Validate();
+            }
+            catch (Exception ex)
+            {
+                ToastService.Current.Show(new Toast(ex.Message, TextResources.GetString("ThemeErrorDialog.Title"), ToastIcon.Error));
+
+                if (themeId.Type is ThemeType.Custom)
+                {
+                    return GeThemeProfile(new ThemeSource(ThemeType.Dark));
+                }
+                else
+                {
+                    return ThemeProfile.Default.Validate();
+                }
+            }
+        }
+
+        private ThemeProfile LoadThemeProfile(ThemeSource themeId)
+        {
+            switch (themeId.Type)
+            {
+                case ThemeType.Dark:
+                    return ThemeProfileTools.LoadFromContent(_darkThemeContentPath);
+
+                case ThemeType.DarkMonochrome:
+                    return ThemeProfileTools.LoadFromContent(_darkMonochromeThemeContentPath);
+
+                case ThemeType.Light:
+                    return ThemeProfileTools.LoadFromContent(_lightThemeContentPath);
+
+                case ThemeType.LightMonochrome:
+                    return ThemeProfileTools.LoadFromContent(_lightMonochromeThemeContentPath);
+
+                case ThemeType.HighContrast:
+                    return ThemeProfileTools.LoadFromContent(_highContrastThemeContentPath);
+
+                case ThemeType.System:
+                    if (SystemVisualParameters.Current.IsHighContrast)
+                    {
+                        return LoadThemeProfile(new ThemeSource(ThemeType.HighContrast));
+                    }
+                    else if (Windows10Tools.IsWindows10_OrGreater())
+                    {
+                        ThemeProfile themeProfile = SystemVisualParameters.Current.Theme switch
+                        {
+                            SystemThemeType.Dark => LoadThemeProfile(new ThemeSource(ThemeType.Dark)),
+                            SystemThemeType.Light => LoadThemeProfile(new ThemeSource(ThemeType.Light)),
+                            _ => throw new NotSupportedException(),
+                        };
+                        themeProfile.Colors["Control.Accent"] = new ThemeColor(SystemVisualParameters.Current.AccentColor, 1.0);
+                        return themeProfile;
+                    }
+                    else
+                    {
+                        return LoadThemeProfile(new ThemeSource(ThemeType.Dark));
+                    }
+
+                case ThemeType.Custom:
+                    if (string.IsNullOrEmpty(Config.Current.Theme.CustomThemeFolder))
+                    {
+                        ToastService.Current.Show(new Toast(TextResources.GetString("ThemeErrorDialog.FolderIsNotSet"), TextResources.GetString("ThemeErrorDialog.Title"), ToastIcon.Error));
+                    }
+                    else
+                    {
+                        try
+                        {
+                            var path = themeId.CustomThemeFilePath;
+                            return ValidateBasedOn(ThemeProfileTools.LoadFromFile(path), Path.GetDirectoryName(path));
+                        }
+                        catch (Exception ex)
+                        {
+                            ToastService.Current.Show(new Toast(ex.Message, TextResources.GetString("ThemeErrorDialog.Title"), ToastIcon.Error));
+                        }
+                    }
+                    return LoadThemeProfile(new ThemeSource(ThemeType.Dark));
+
+                default:
+                    throw new NotSupportedException();
+            }
+        }
+
+        private ThemeProfile ValidateBasedOn(ThemeProfile themeProfile, string? currentPath, IEnumerable<string>? nests = null)
+        {
+            if (currentPath is null) throw new ArgumentNullException(nameof(currentPath));
+
+            if (string.IsNullOrWhiteSpace(themeProfile.BasedOn))
+            {
+                return ThemeProfileTools.Merge(ThemeProfile.Default, themeProfile);
+            }
+
+            if (themeProfile.BasedOn.StartsWith(_themeProtocolHeader, StringComparison.Ordinal))
+            {
+                var path = themeProfile.BasedOn[_themeProtocolHeader.Length..];
+                var baseTheme = ThemeProfileTools.LoadFromContent("Libraries/Themes/" + path);
+                return ThemeProfileTools.Merge(baseTheme, themeProfile);
+            }
+            else
+            {
+                var path = Path.IsPathFullyQualified(themeProfile.BasedOn) ? themeProfile.BasedOn : Path.Combine(currentPath, themeProfile.BasedOn);
+                if (nests != null && nests.Contains(path)) throw new FormatException($"Circular reference: {path}");
+                nests = nests is null ? new List<string>() { path } : nests.Append(path);
+                var baseTheme = ValidateBasedOn(ThemeProfileTools.LoadFromFile(path), Path.GetDirectoryName(path), nests);
+                return ThemeProfileTools.Merge(baseTheme, themeProfile);
+            }
+        }
+
+        public static void OpenCustomThemeFolder()
+        {
+            if (string.IsNullOrEmpty(Config.Current.Theme.CustomThemeFolder))
+            {
+                new MessageDialog(TextResources.GetString("Word.Error"), TextResources.GetString("ThemeErrorDialog.FolderIsNotSet")).ShowDialog();
+                return;
+            }
+
+            try
+            {
+                var directory = new DirectoryInfo(Config.Current.Theme.CustomThemeFolder);
+                if (!FileIO.Exists(directory))
+                {
+                    directory.Create();
+                    ThemeProfileTools.SaveFromContent(_customThemeTemplateContentPath, Path.Combine(directory.FullName, "Sample.json"));
+                }
+                ExternalProcess.OpenWithFileManager(directory.FullName, true, new ExternalProcessOptions() { IsThrowException = true });
+            }
+            catch (Exception ex)
+            {
+                new MessageDialog(TextResources.GetString("Word.Error"), ex.Message).ShowDialog();
+            }
+        }
+
+    }
+}

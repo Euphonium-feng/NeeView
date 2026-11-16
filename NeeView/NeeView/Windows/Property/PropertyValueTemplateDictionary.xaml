@@ -1,0 +1,148 @@
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:nv="clr-namespace:NeeView"
+                    xmlns:nwc="clr-namespace:NeeView.Windows.Controls" 
+                    xmlns:osc="clr-namespace:OpenSourceControls"
+                    xmlns:i="http://schemas.microsoft.com/xaml/behaviors"
+                    xmlns:local="clr-namespace:NeeView.Windows.Property">
+
+    <nv:DoubleToPercentStringConverter x:Key="DoubleToPercentStringConverter" />
+
+    <DataTemplate DataType="{x:Type local:PropertyValue_Data}">
+        <ContentControl Content="{Binding Data}" Focusable="False" />
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type local:PropertyValue_Object}">
+        <ContentControl Content="{Binding Value}" Foreground="Gray"/>
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type local:PropertyValue_Boolean}">
+        <CheckBox IsChecked="{Binding Value}" FocusVisualStyle="{StaticResource NVBorderFocusVisual}"/>
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type local:PropertyValue_String}">
+        <nwc:TextBoxWithMessage Text="{Binding Value, Mode=TwoWay}" EmptyMessage="{Binding EmptyMessage}"/>
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type local:PropertyValue_StringRegex}">
+        <nwc:TextBoxWithMessage EmptyMessage="{Binding EmptyMessage}" Validation.ErrorTemplate="{StaticResource NVValidationTemplate}">
+            <nwc:TextBoxWithMessage.Text>
+                <Binding Path="Value" Mode="TwoWay" UpdateSourceTrigger="PropertyChanged">
+                    <Binding.ValidationRules>
+                        <local:RegexValidationRule />
+                    </Binding.ValidationRules>
+                </Binding>
+            </nwc:TextBoxWithMessage.Text>
+        </nwc:TextBoxWithMessage>
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type local:PropertyValue_Integer}">
+        <nwc:EnterTriggerTextBox Text="{Binding Value}"/>
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type local:PropertyValue_IntegerRange}">
+        <DockPanel KeyboardNavigation.TabNavigation="Local">
+            <nwc:EnterTriggerTextBox DockPanel.Dock="Right" Text="{Binding Value}" Slider="{Binding ElementName=InnerSlider}" Width="70" VerticalAlignment="Center" Margin="5,0,0,0" TabIndex="2"/>
+            <Slider x:Name="InnerSlider" Value="{Binding Range.Value}" Minimum="{Binding Range.Minimum}" Maximum="{Binding Range.Maximum}" SmallChange="{Binding Range.SmallChange}" LargeChange="{Binding Range.LargeChange}"
+                    TickFrequency="{Binding Range.TickFrequency}" IsSnapToTickEnabled="True" VerticalAlignment="Center" TabIndex="1"/>
+        </DockPanel>
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type local:PropertyValue_Double}">
+        <nwc:EnterTriggerTextBox Text="{Binding Value, StringFormat={}{0:0.#####}}" />
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type local:PropertyValue_DoubleFloat}">
+        <nwc:EnterTriggerTextBox Text="{Binding Value, StringFormat={}{0:0.0####}}" />
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type local:PropertyValue_DoubleRange}">
+        <DockPanel KeyboardNavigation.TabNavigation="Local">
+            <nwc:EnterTriggerTextBox DockPanel.Dock="Right" Text="{Binding Value, StringFormat={}{0:0.#####}}" Slider="{Binding ElementName=InnerSlider}" Width="70" VerticalAlignment="Center" Margin="5,0,0,0" TabIndex="2"/>
+            <Slider x:Name="InnerSlider" Value="{Binding Range.Value}" Minimum="{Binding Range.Minimum}" Maximum="{Binding Range.Maximum}" SmallChange="{Binding Range.SmallChange}" LargeChange="{Binding Range.LargeChange}"
+                    TickFrequency="{Binding Range.TickFrequency}" IsSnapToTickEnabled="True" VerticalAlignment="Center" TabIndex="1"/>
+        </DockPanel>
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type local:PropertyValue_Percent}">
+        <DockPanel KeyboardNavigation.TabNavigation="Local">
+            <nwc:EnterTriggerTextBox DockPanel.Dock="Right" Text="{Binding Value, Converter={StaticResource DoubleToPercentStringConverter}}" Slider="{Binding ElementName=InnerSlider}" Width="70"
+                    VerticalAlignment="Center" Margin="5,0,0,0" TabIndex="2" />
+            <Slider x:Name="InnerSlider" Value="{Binding Range.Value}" Minimum="{Binding Range.Minimum}" Maximum="{Binding Range.Maximum}" SmallChange="{Binding Range.SmallChange}"
+                    LargeChange="{Binding Range.LargeChange}" TickFrequency="{Binding Range.TickFrequency}" IsSnapToTickEnabled="True" VerticalAlignment="Center" TabIndex="1" />
+        </DockPanel>
+    </DataTemplate>
+
+
+    <DataTemplate DataType="{x:Type local:PropertyValue_Enum}">
+        <ComboBox ItemsSource="{Binding Map}" SelectedValuePath="Key" DisplayMemberPath="Value" SelectedValue="{Binding SelectedValue}" IsDropDownOpen="{Binding IsComboBoxOpen, Mode=TwoWay}" />
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type local:PropertyValue_IntegerMap}">
+        <ComboBox ItemsSource="{Binding Map}" SelectedValuePath="Key" DisplayMemberPath="Value" SelectedValue="{Binding SelectedValue}" IsDropDownOpen="{Binding IsComboBoxOpen, Mode=TwoWay}">
+            <i:Interaction.Triggers>
+                <i:EventTrigger EventName="DropDownOpened">
+                    <i:CallMethodAction TargetObject="{Binding .}" MethodName="UpdateMap" />
+                </i:EventTrigger>
+            </i:Interaction.Triggers>
+        </ComboBox>
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type local:PropertyValue_StringMap}">
+        <ComboBox ItemsSource="{Binding Map}" SelectedValuePath="Key" DisplayMemberPath="Value" SelectedValue="{Binding SelectedValue}" IsDropDownOpen="{Binding IsComboBoxOpen, Mode=TwoWay}">
+            <i:Interaction.Triggers>
+                <i:EventTrigger EventName="DropDownOpened">
+                    <i:CallMethodAction TargetObject="{Binding .}" MethodName="UpdateMap" />
+                </i:EventTrigger>
+            </i:Interaction.Triggers>
+        </ComboBox>
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type local:PropertyValue_Point}">
+        <nwc:PointInspector Point="{Binding Value, Mode=TwoWay}"/>
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type local:PropertyValue_Size}">
+        <nwc:SizeInspector Size="{Binding Value, Mode=TwoWay}"/>
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type local:PropertyValue_Color}">
+        <nwc:ColorPicker Color="{Binding Value}" DefaultColor="{Binding DefaultColor}" ColorMode="{Binding System.ColorMode}"  />
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type local:PropertyValue_FilePath}">
+        <nwc:FileNameBox Text="{Binding Value, Mode=TwoWay}" DefaultText="{Binding DefaultFileName}" Filter="{Binding Filter}" FileDialogType="{Binding FileDialogType}" Note="{Binding Note}"/>
+    </DataTemplate>
+
+    <DataTemplate x:Key="PropertyValue_Boolean_ToggleSwitch">
+        <nwc:ToggleSwitch IsChecked="{Binding Value}" Height="30" HorizontalAlignment="Right" VerticalAlignment="Center" />
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type local:PropertyValue_PropertyValueWithNote}">
+        <StackPanel>
+            <ContentControl Content="{Binding PropertyValue}" />
+            <TextBlock Text="{Binding Note}" Margin="5,2" HorizontalAlignment="Right" />
+        </StackPanel>
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type local:PropertyValue_ColorizeControlPoint}">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <nwc:ColorizeControlPointEdit Grid.Column="0" ControlPoint="{Binding Value, Mode=TwoWay}" VerticalAlignment="Center" />
+            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <Button Style="{StaticResource NavigateButtonStyle}" 
+                        Command="{Binding DataContext.DeleteItemCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}">
+                    <Image Style="{StaticResource ClearIconImageStyle}" />
+                </Button>
+                <Button Style="{StaticResource NavigateButtonStyle}" 
+                        Command="{Binding DataContext.NewItemCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}">
+                    <Image Style="{StaticResource AddIconImageStyle}" />
+                </Button>
+            </StackPanel>
+        </Grid>
+    </DataTemplate>
+
+</ResourceDictionary>

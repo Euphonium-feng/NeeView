@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="..\NeeView.props" />
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <RootNamespace>NeeLaboratory.Remote</RootNamespace>
+    <Platforms>AnyCPU</Platforms>
+    <IsTrimmable>true</IsTrimmable>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <Description>IPC library</Description>
+  </PropertyGroup>
+  
+</Project>

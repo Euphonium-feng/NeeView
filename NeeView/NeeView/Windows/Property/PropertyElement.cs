@@ -1,0 +1,565 @@
+﻿using NeeView.Effects;
+using System;
+using System.Collections;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
+using System.Linq;
+using System.Reflection;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+
+namespace NeeView.Windows.Property
+{
+    // 基底クラス
+    public class PropertyDrawElement
+    {
+    }
+
+    /// <summary>
+    /// タイトル項目
+    /// </summary>
+    public class PropertyTitleElement : PropertyDrawElement
+    {
+        public string Name { get; set; }
+
+        public PropertyTitleElement(string name)
+        {
+            Name = name;
+        }
+    }
+
+    public class PropertySeparatorElement : PropertyDrawElement
+    {
+    }
+
+    public class PropertyValueSource : IValueSetter
+    {
+        private readonly object _source;
+        private readonly PropertyInfo _info;
+        private readonly object?[]? _index;
+
+        public PropertyValueSource(object source, PropertyInfo? info, object?[]? index)
+        {
+            if (info is null) throw new ArgumentNullException(nameof(info));
+
+            _source = source;
+            _info = info;
+            _index = index;
+
+            if (source is INotifyPropertyChanged notify)
+            {
+                notify.PropertyChanged += (s, e) =>
+                {
+                    if (string.IsNullOrEmpty(e.PropertyName) || e.PropertyName == _info.Name)
+                    {
+                        ValueChanged?.Invoke(s, e);
+                    }
+                };
+            }
+        }
+
+        public PropertyValueSource(object source, string propertyName, object?[]? index) : this(source, source.GetType().GetProperty(propertyName), index)
+        {
+        }
+
+
+        public event EventHandler? ValueChanged;
+
+
+        public object Source => _source;
+        public PropertyInfo Info => _info;
+        public object?[]? Index => _index;
+
+        public string Name => _info.Name;
+        public Type PropertyType => _info.PropertyType;
+
+
+        public void SetValue(object? value)
+        {
+            _info.SetValue(_source, value, _index);
+        }
+
+        public object? GetValue()
+        {
+            return _info.GetValue(_source, _index);
+        }
+
+        public object? GetValue(object source)
+        {
+            return _info.GetValue(source, _index);
+        }
+    }
+
+
+    /// <summary>
+    /// プロパティ項目表示編集
+    /// </summary>
+    public class PropertyMemberElement : PropertyDrawElement, IValueSetter
+    {
+        private PropertyInfo _info;
+
+
+        /// <summary>
+        /// コンストラクタ
+        /// </summary>
+        /// <param name="source">プロパティの所属インスタンス</param>
+        /// <param name="info">プロパティ情報</param>
+        /// <param name="attribute">PropertyMember属性</param>
+        /// <param name="options">オプション</param>
+        /// <param name="data">プロパティの代わりに表示するデータ</param>
+        public PropertyMemberElement(object source, PropertyInfo info, object?[]? index, PropertyMemberAttribute attribute, PropertyMemberElementOptions options, object? data = null)
+        {
+            MemberAttribute = attribute;
+            Data = data;
+
+            PropSource = new PropertyValueSource(source, info, index);
+
+            InitializeCommon(PropSource, attribute, options);
+
+            if (data != null)
+            {
+                InitializeByDataOption(data);
+            }
+            else
+            {
+                switch (attribute)
+                {
+                    case PropertyPercentFontSizeAttribute percentFontSizeAttribute:
+                        InitializeByPercentFontSizeAttribute(percentFontSizeAttribute);
+                        break;
+
+                    case PropertyPercentAttribute percentAttribute:
+                        InitializeByPercentAttribute(percentAttribute);
+                        break;
+
+                    case PropertyRangeAttribute rangeAttribute:
+                        InitializeByRangeAttribute(rangeAttribute);
+                        break;
+
+                    case PropertyPathAttribute pathAttribute:
+                        InitializeByPathAttribute(pathAttribute);
+                        break;
+
+                    case PropertyIntegersAttribute integersAttribute:
+                        InitializeByIntegersAttribute(integersAttribute);
+                        break;
+
+                    case PropertyStringsAttribute stringsAttribute:
+                        InitializeByStringsAttribute(stringsAttribute);
+                        break;
+
+                    case PropertyColorAttribute colorAttribute:
+                        InitializeByColorAttribute(colorAttribute);
+                        break;
+
+                    default:
+                        InitializeByDefaultAttribute(attribute);
+                        break;
+                }
+            }
+        }
+
+
+        public event EventHandler? ValueChanged;
+
+
+        public PropertyValueSource PropSource { get; set; }
+        public object Source { get; set; }
+        public PropertyInfo PropertyInfo => _info;
+        public string Path => _info.Name;
+        public string Name { get; set; }
+        public string? Tips { get; set; }
+        public bool IsVisible { get; set; }
+        public object? Default { get; set; }
+        public bool IsObsolete { get; set; }
+        public string? EmptyMessage { get; set; }
+        public PropertyMemberAttribute MemberAttribute { get; }
+        public PropertyMemberElementOptions Options { get; set; }
+        public PropertyValue TypeValue { get; set; }
+        public Orientation Orientation { get; set; } = Orientation.Horizontal;
+        public object? Data { get; }
+        public bool IsHeaderVisible { get; set; } = true;
+
+
+        [MemberNotNull(nameof(_info), nameof(Source), nameof(Name), nameof(Options))]
+        private void InitializeCommon(PropertyValueSource propSource, PropertyMemberAttribute attribute, PropertyMemberElementOptions options)
+        {
+            _info = propSource.Info;
+
+            Source = propSource.Source;
+            Name = options.Name ?? PropertyMemberAttributeExtensions.GetPropertyName(_info, attribute) ?? _info.Name;
+            Tips = options.Tips ?? PropertyMemberAttributeExtensions.GetPropertyTips(_info, attribute);
+            IsVisible = attribute == null || attribute.IsVisible;
+            EmptyMessage = attribute?.EmptyMessage;
+            Options = options;
+            Orientation = attribute?.Orientation ?? Orientation.Horizontal;
+
+            this.Default = GetDefaultValue(propSource);
+            this.IsObsolete = GetObsoleteAttribute(_info) != null;
+
+            if (Source is INotifyPropertyChanged notify)
+            {
+                notify.PropertyChanged += (s, e) =>
+                {
+                    if (string.IsNullOrEmpty(e.PropertyName) || e.PropertyName == _info.Name)
+                    {
+                        ValueChanged?.Invoke(s, e);
+                    }
+                };
+            }
+        }
+
+        [MemberNotNull(nameof(TypeValue))]
+        private void InitializeByDataOption(object data)
+        {
+            this.TypeValue = new PropertyValue_Data(this, data);
+        }
+
+        [MemberNotNull(nameof(TypeValue))]
+        private void InitializeByDefaultAttribute(PropertyMemberAttribute attribute)
+        {
+            var typeValue = CreateDefaultPropertyValue(attribute);
+            if (attribute.NoteConverter is null)
+            {
+                this.TypeValue = typeValue;
+            }
+            else
+            {
+                this.TypeValue = new PropertyValue_PropertyValueWithNote(typeValue, attribute.NoteConverter);
+            }
+        }
+
+        private PropertyValue CreateDefaultPropertyValue(PropertyMemberAttribute attribute)
+        {
+            if (_info.PropertyType.IsEnum)
+            {
+                return new PropertyValue_Enum(this, _info.PropertyType);
+            }
+
+            if (typeof(IList).IsAssignableFrom(_info.PropertyType))
+            {
+                this.Orientation = Orientation.Vertical;
+                var collection = _info.GetValue(Source) as IList;
+                Debug.Assert(collection != null);
+                return new PropertyValue_Collection(this, collection);
+            }
+
+            TypeCode typeCode = Type.GetTypeCode(_info.PropertyType);
+            switch (typeCode)
+            {
+                case TypeCode.Boolean:
+                    return new PropertyValue_Boolean(this);
+                case TypeCode.String:
+                    if (attribute.IsRegex)
+                    {
+                        return new PropertyValue_StringRegex(this);
+                    }
+                    else
+                    {
+                        return new PropertyValue_String(this);
+                    }
+                case TypeCode.Int32:
+                    return new PropertyValue_Integer(this);
+                case TypeCode.Double:
+                    if (attribute.HasDecimalPoint)
+                    {
+                        return new PropertyValue_DoubleFloat(this);
+                    }
+                    else
+                    {
+                        return new PropertyValue_Double(this);
+                    }
+                default:
+                    if (_info.PropertyType == typeof(Point))
+                    {
+                        return new PropertyValue_Point(this);
+                    }
+                    else if (_info.PropertyType == typeof(Color))
+                    {
+                        return new PropertyValue_Color(this);
+                    }
+                    else if (_info.PropertyType == typeof(Size))
+                    {
+                        return new PropertyValue_Size(this);
+                    }
+                    else if (_info.PropertyType == typeof(TimeSpan))
+                    {
+                        return new PropertyValue_TimeSpan(this);
+                    }
+                    else if (_info.PropertyType == typeof(ColorizeControlPoint))
+                    {
+                        return new PropertyValue_ColorizeControlPoint(this);
+                    }
+                    else
+                    {
+                        return new PropertyValue_Object(this);
+                    }
+            }
+        }
+
+        [MemberNotNull(nameof(TypeValue))]
+        private void InitializeByRangeAttribute(PropertyRangeAttribute attribute)
+        {
+            IValueSetter value = attribute.RangeProperty != null ? (IValueSetter)new PropertyValueSource(this.Source, attribute.RangeProperty, null) : this;
+
+            TypeCode typeCode = Type.GetTypeCode(_info.PropertyType);
+            this.TypeValue = typeCode switch
+            {
+                TypeCode.Int32 => CreatePropertyValue(new RangeProfile_Integer(value, attribute.Minimum, attribute.Maximum, attribute.TickFrequency, attribute.IsEditable, attribute.Format)),
+                TypeCode.Double => CreatePropertyValue(new RangeProfile_Double(value, attribute.Minimum, attribute.Maximum, attribute.TickFrequency, attribute.IsEditable, attribute.Format, attribute.HasDecimalPoint)),
+                _ => throw new NotSupportedException(),
+            };
+        }
+
+        private PropertyValue CreatePropertyValue(RangeProfile_Integer profile)
+        {
+            if (profile.IsEditable)
+            {
+                return new PropertyValue_EditableIntegerRange(this, profile);
+            }
+            else
+            {
+                return new PropertyValue_IntegerRange(this, profile);
+            }
+        }
+
+        private PropertyValue CreatePropertyValue(RangeProfile_Double profile)
+        {
+            if (profile.IsEditable)
+            {
+                return new PropertyValue_EditableDoubleRange(this, profile);
+            }
+            else
+            {
+                return new PropertyValue_DoubleRange(this, profile);
+            }
+        }
+
+        [MemberNotNull(nameof(TypeValue))]
+        private void InitializeByPercentAttribute(PropertyPercentAttribute attribute)
+        {
+            IValueSetter value = attribute.RangeProperty != null ? (IValueSetter)new PropertyValueSource(this.Source, attribute.RangeProperty, null) : this;
+
+            TypeCode typeCode = Type.GetTypeCode(_info.PropertyType);
+            this.TypeValue = typeCode switch
+            {
+                TypeCode.Double => new PropertyValue_Percent(this, new RangeProfile_Double(value, attribute.Minimum, attribute.Maximum, attribute.TickFrequency, attribute.IsEditable, attribute.Format, attribute.HasDecimalPoint)),
+                _ => throw new NotSupportedException(),
+            };
+        }
+
+        [MemberNotNull(nameof(TypeValue))]
+        private void InitializeByPercentFontSizeAttribute(PropertyPercentFontSizeAttribute attribute)
+        {
+            IValueSetter value = attribute.RangeProperty != null ? (IValueSetter)new PropertyValueSource(this.Source, attribute.RangeProperty, null) : this;
+
+            TypeCode typeCode = Type.GetTypeCode(_info.PropertyType);
+            if (typeCode != TypeCode.Double) throw new NotSupportedException();
+
+            var rangeProfile = new RangeProfile_Double(value, attribute.Minimum, attribute.Maximum, attribute.TickFrequency, attribute.IsEditable, attribute.Format, attribute.HasDecimalPoint);
+
+            this.TypeValue = attribute.FontType switch
+            {
+                FontType.Message => new PropertyValue_PercentMessageFontSize(this, rangeProfile),
+                FontType.Menu => new PropertyValue_PercentMenuFontSize(this, rangeProfile),
+                _ => throw new NotSupportedException(),
+            };
+        }
+
+        [MemberNotNull(nameof(TypeValue))]
+        private void InitializeByPathAttribute(PropertyPathAttribute attribute)
+        {
+            TypeCode typeCode = Type.GetTypeCode(_info.PropertyType);
+            this.TypeValue = typeCode switch
+            {
+                TypeCode.String => new PropertyValue_FilePath(this, attribute.FileDialogType, attribute.Filter, attribute.Note, attribute.DefaultFileName),
+                _ => throw new NotSupportedException(),
+            };
+        }
+
+
+        [MemberNotNull(nameof(TypeValue))]
+        private void InitializeByIntegersAttribute(PropertyIntegersAttribute attribute)
+        {
+            TypeCode typeCode = Type.GetTypeCode(_info.PropertyType);
+            this.TypeValue = typeCode switch
+            {
+                TypeCode.Int32 => new PropertyValue_IntegerMap(this, attribute.Integers, attribute.GetMapGenerator()),
+                _ => throw new NotSupportedException(),
+            };
+        }
+
+        [MemberNotNull(nameof(TypeValue))]
+        private void InitializeByStringsAttribute(PropertyStringsAttribute attribute)
+        {
+            TypeCode typeCode = Type.GetTypeCode(_info.PropertyType);
+            this.TypeValue = typeCode switch
+            {
+                TypeCode.String => new PropertyValue_StringMap(this, attribute.Strings),
+                _ => throw new NotSupportedException(),
+            };
+        }
+
+        [MemberNotNull(nameof(TypeValue))]
+        private void InitializeByColorAttribute(PropertyColorAttribute colorAttribute)
+        {
+            if (_info.PropertyType != typeof(Color)) throw new NotSupportedException();
+
+            this.TypeValue = new PropertyValue_Color(this, colorAttribute.GetDefaultColor());
+        }
+
+        private static object? GetDefaultValue(PropertyValueSource propSource)
+        {
+            var attributes = Attribute.GetCustomAttributes(propSource.Info, typeof(DefaultValueAttribute));
+            if (attributes != null && attributes.Length > 0)
+            {
+                return ((DefaultValueAttribute)attributes[0]).Value;
+            }
+            else
+            {
+                // 未定の場合は現在値
+                return propSource.GetValue();
+            }
+        }
+
+        private static ObsoleteAttribute? GetObsoleteAttribute(PropertyInfo info)
+        {
+            return (ObsoleteAttribute?)(Attribute.GetCustomAttribute(info, typeof(ObsoleteAttribute)));
+        }
+
+        public Type GetValueType()
+        {
+            return _info.PropertyType;
+        }
+
+        public string GetValueString()
+        {
+            return TypeValue.GetValueString();
+        }
+
+        public void ResetValue()
+        {
+            var resetable = MemberAttribute.GetPropertyReset();
+            if (resetable is not null)
+            {
+                resetable.ResetProperties(PropSource);
+            }
+            else
+            {
+                // TODO: DefaultValue はここで生成
+                SetValue(Default);
+            }
+
+            TypeValue.Refresh();
+        }
+
+        public void InitializeValue()
+        {
+            var defaultValueAttribute = _info.GetCustomAttribute<DefaultValueAttribute>();
+            if (defaultValueAttribute is not null)
+            {
+                //Debug.WriteLine($"Reset DefaultValue: {Source.GetType().FullName}.{_info.Name} = {defaultValueAttribute.Value}");
+                SetValue(defaultValueAttribute.Value);
+            }
+            else
+            {
+                var defaultSource = Options?.GetDefaultSource?.Invoke() ?? CreateDefaultSource();
+                var value = GetValue(defaultSource);
+                //Debug.WriteLine($"Reset DefaultSource: {Source.GetType().FullName}.{_info.Name} = {value}");
+                SetValue(value);
+            }
+        }
+
+        private object CreateDefaultSource()
+        {
+            var type = this.Source.GetType();
+            return Activator.CreateInstance(type) ?? throw new InvalidOperationException("Cannot create instance from object.");
+        }
+
+        public void SetValue(object? value)
+        {
+            //_info.SetValue(this.Source, value);
+            PropSource.SetValue(value);
+        }
+
+        public void SetValueFromString(string value)
+        {
+            TypeValue.SetValueFromString(value);
+        }
+
+        public object? GetValue()
+        {
+            return PropSource.GetValue();
+        }
+
+        public object? GetValue(object source)
+        {
+            return PropSource.GetValue(source);
+        }
+
+
+        public static PropertyMemberElement Create(object source, string name)
+        {
+            return Create(source, name, PropertyMemberElementOptions.Default, null);
+        }
+
+        public static PropertyMemberElement Create(object source, string name, object? data)
+        {
+            return Create(source, name, PropertyMemberElementOptions.Default, data);
+        }
+
+        public static PropertyMemberElement Create(object source, string name, PropertyMemberElementOptions options)
+        {
+            return Create(source, name, options, null);
+        }
+
+        public static PropertyMemberElement Create(object source, string name, PropertyMemberElementOptions options, object? data)
+        {
+            var info = source.GetType().GetProperty(name);
+            if (info is null) throw new ArgumentException($"{source.GetType()} does not have the property '{name}'");
+
+            var attribute = GetPropertyMemberAttribute(info);
+            if (attribute is null) throw new InvalidOperationException($"Need PropertyMemberAttribute at {source.GetType()}.{name}");
+
+            return new PropertyMemberElement(source, info, null, attribute, options, data);
+        }
+
+        /// <summary>
+        /// PropertyMember属性取得
+        /// </summary>
+        /// <param name="info"></param>
+        /// <returns></returns>
+        private static PropertyMemberAttribute? GetPropertyMemberAttribute(MemberInfo info)
+        {
+            return (PropertyMemberAttribute?)Attribute.GetCustomAttributes(info, typeof(PropertyMemberAttribute)).FirstOrDefault();
+        }
+    }
+
+
+
+    public class PropertyDocumentElement : PropertyDrawElement
+    {
+        public PropertyDocumentElement(PropertyDocument document, PropertyMemberElementOptions options)
+        {
+            Document = document;
+            Options = options;
+        }
+
+        public PropertyDocument Document { get; set; }
+        public PropertyMemberElementOptions Options { get; set; }
+
+
+        public static PropertyDocumentElement Create(PropertyDocument document)
+        {
+            return Create(document, PropertyMemberElementOptions.Default);
+        }
+
+        public static PropertyDocumentElement Create(PropertyDocument document, PropertyMemberElementOptions options)
+        {
+            return new PropertyDocumentElement(document, options);
+        }
+    }
+
+}

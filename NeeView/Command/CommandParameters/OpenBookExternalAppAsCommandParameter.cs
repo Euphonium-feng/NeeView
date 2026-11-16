@@ -1,0 +1,22 @@
+﻿using Generator.Equals;
+using NeeView.Windows.Property;
+using System;
+
+namespace NeeView
+{
+    [Equatable(Explicit = true)]
+    public partial class OpenBookExternalAppAsCommandParameter : CommandParameter
+    {
+        [DefaultEquality] private int _index;
+
+        /// <summary>
+        /// 選択された外部アプリの番号。0 は未選択
+        /// </summary>
+        [PropertyIntegers(MapGenerator = typeof(ExternalAppMapGenerator))]
+        public int Index
+        {
+            get { return _index; }
+            set { SetProperty(ref _index, Math.Max(0, value)); }
+        }
+    }
+}

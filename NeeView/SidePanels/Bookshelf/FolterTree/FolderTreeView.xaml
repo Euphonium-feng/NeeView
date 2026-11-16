@@ -1,0 +1,121 @@
+﻿<UserControl x:Class="NeeView.FolderTreeView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:i="http://schemas.microsoft.com/expression/2010/interactivity"
+             xmlns:b="http://schemas.microsoft.com/xaml/behaviors"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:NeeView"
+             xmlns:nw="clr-namespace:NeeView.Windows"
+             xmlns:properties="clr-namespace:NeeView.Properties"
+             mc:Ignorable="d" 
+             d:DesignHeight="450" d:DesignWidth="800">
+
+    <UserControl.Resources>
+
+        <Style x:Key="IconImageStyle" TargetType="{x:Type Image}">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Width" Value="16" />
+            <Setter Property="Height" Value="16" />
+            <Setter Property="Margin" Value="0,0,0,1"/>
+        </Style>
+
+        <Style x:Key="NodeTextBlockStyle" TargetType="{x:Type TextBlock}">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="5,0,0,0"/>
+            <Setter Property="Foreground" Value="{DynamicResource Panel.Foreground}"/>
+            <Setter Property="FontSize" Value="{DynamicResource FolderTreeFontSize}"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+
+        <local:ImageSourceCollectionToImageSourceConverter x:Key="ImageSourceCollectionToImageSourceConverter" Width="16.0" />
+        <local:QuickAccessEntryToImageSourceConverter x:Key="QuickAccessEntryToImageSourceConverter" />
+
+        <HierarchicalDataTemplate x:Key="DefaultNodeTemplate" ItemsSource="{Binding Children}">
+            <DockPanel>
+                <Image Style="{StaticResource IconImageStyle}">
+                    <Image.Source>
+                        <MultiBinding Converter="{StaticResource ImageSourceCollectionToImageSourceConverter}">
+                            <Binding Path="Icon" />
+                            <Binding Path="DataContext.DpiScale" ElementName="Root" />
+                        </MultiBinding>
+                    </Image.Source>
+                </Image>
+                <TextBlock x:Name="FileNameTextBlock" Style="{StaticResource NodeTextBlockStyle}" Text="{Binding DisplayName}"/>
+            </DockPanel>
+        </HierarchicalDataTemplate>
+
+        <HierarchicalDataTemplate x:Key="QuickAccessNodeTemplate" ItemsSource="{Binding Children}">
+            <DockPanel>
+                <Image Style="{StaticResource IconImageStyle}">
+                    <Image.Source>
+                        <MultiBinding Converter="{StaticResource QuickAccessEntryToImageSourceConverter}">
+                            <Binding Path="Value" />
+                            <Binding Path="DataContext.DpiScale" ElementName="Root" />
+                        </MultiBinding>
+                    </Image.Source>
+                </Image>
+                <TextBlock x:Name="FileNameTextBlock" Style="{StaticResource NodeTextBlockStyle}" Text="{Binding Value.Name}"/>
+            </DockPanel>
+        </HierarchicalDataTemplate>
+
+        <local:FolderTreeItemTemplateSelector x:Key="FolderTreeItemTemplateSelector"
+                                              Default="{StaticResource DefaultNodeTemplate}"
+                                              QuickAccess="{StaticResource QuickAccessNodeTemplate}"/>
+
+    </UserControl.Resources>
+
+    <Grid x:Name="Root">
+        <TreeView x:Name="TreeView"
+                  Style="{StaticResource NVTreeView}"
+                  ItemTemplateSelector="{StaticResource FolderTreeItemTemplateSelector}"
+                  Foreground="{DynamicResource Panel.Foreground}" Background="Transparent" BorderThickness="0"
+                  SelectedItemChanged="TreeView_SelectedItemChanged"
+                  IsVisibleChanged="TreeView_IsVisibleChanged"
+                  ScrollViewer.VerticalScrollBarVisibility="Auto"
+                  AllowDrop="True"
+                  PreviewDragEnter="TreeView_PreviewDragEnter"
+                  PreviewDragLeave="TreeView_PreviewDragLeave"
+                  PreviewDragOver="TreeView_PreviewDragOver"
+                  Drop="TreeView_Drop"
+                  KeyDown="TreeView_KeyDown"
+                  TextInput="TreeView_TextInput"
+                  IsKeyboardFocusWithinChanged="TreeView_IsKeyboardFocusWithinChanged"
+                  VirtualizingStackPanel.ScrollUnit="Item"
+                  VirtualizingStackPanel.IsVirtualizing="True"
+                  VirtualizingStackPanel.VirtualizationMode="Recycling">
+
+            <b:Interaction.Behaviors>
+                <nw:TreeViewDragDropStartBehavior AllowedEffects="Copy,Move,Scroll" DragBeginAsync="DragStartBehavior_DragBeginAsync"
+                        DragDropHook="{x:Static local:DragDropWatcher.DragDropHook}" />
+            </b:Interaction.Behaviors>
+
+            <TreeView.ItemContainerStyle>
+                <Style TargetType="{x:Type TreeViewItem}" BasedOn="{StaticResource NVTreeViewItem}">
+                    <Setter Property="ItemsPanel">
+                        <Setter.Value>
+                            <ItemsPanelTemplate>
+                                <local:CustomVirtualizingStackPanel/>
+                            </ItemsPanelTemplate>
+                        </Setter.Value>
+                    </Setter>
+                    <Setter Property="ContextMenu">
+                        <Setter.Value>
+                            <ContextMenu/>
+                        </Setter.Value>
+                    </Setter>
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                    <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}"/>
+                    <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
+                    <Setter Property="local:TreeViewItemTools.VerticalMargin" Value="5" />
+                    <EventSetter Event="ContextMenuOpening" Handler="TreeViewItem_ContextMenuOpening"/>
+                    <EventSetter Event="MouseRightButtonDown" Handler="TreeViewItem_MouseRightButtonDown"/>
+                    <EventSetter Event="MouseLeftButtonUp" Handler="TreeViewItem_MouseLeftButtonUp"/>
+                    <EventSetter Event="KeyDown" Handler="TreeViewItem_KeyDown"/>
+                    <EventSetter Event="Selected" Handler="TreeViewItem_Selected" />
+                </Style>
+            </TreeView.ItemContainerStyle>
+
+        </TreeView>
+    </Grid>
+</UserControl>

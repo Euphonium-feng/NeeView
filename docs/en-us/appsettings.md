@@ -1,0 +1,59 @@
+# App Settings File
+
+This section describes the configuration file **NeeView.settings.json**, which defines the behavior of the app.
+
+> [!WARNING]
+> The settings are optimized for the package. Normally, there is no need to edit them.
+
+### PackageType
+
+Types of packages.    
+The app will run in the specified mode.
+
+### Revision
+
+For display.  
+This is the revision number of the app source code repository.
+
+### SelfContained
+
+For display.  
+Whether it was built to be self-contained.  
+false means that it is framework-dependent (-fd).
+
+### UseLocalApplicationData
+
+Save the profile in **LocalApplicationData.**  
+If false, save the profile in the location of the executable file.  
+Msi and Appx are true.
+
+### TemporaryFilesInProfileFolder
+
+Create a default temporary folder in the profile folder.  
+If false, the system's temporary folder is used.
+
+### TrimSaveData (v46.0+)
+
+Prevents default property values from being written to the configuration file.
+If set to false, all properties are written.
+
+### PathProcessGroup
+
+The app path is used to determine multiple launch restrictions.  
+When false, only the process name is used for identification.
+
+### SoftwareRendering (v46.0+)
+
+When true, The WPF rendering is in software only.
+Performance will be reduced.
+
+### Watermark
+
+Displays the watermark for the package type.    
+Alpha and Beta are true.
+
+### LogFile
+
+For development.  
+Specify the path to the log file.    
+If null, no log file will be generated.

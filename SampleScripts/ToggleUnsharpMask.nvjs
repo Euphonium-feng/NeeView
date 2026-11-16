@@ -1,0 +1,9 @@
+// @name Resize shader chain
+// @description Shows where the resize shader chain is configured. Display a warning when the resize filter is not enabled.
+
+if (nv.Config.ImageResizeFilter.IsEnabled) {
+    nv.ShowMessage("Resize shader chain is controlled in Effect panel")
+}
+else {
+    nv.ShowMessage("ResizeFilter is not active")
+}

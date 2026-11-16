@@ -1,0 +1,98 @@
+﻿using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace NeeView
+{
+
+    /// <summary>
+    /// アーカイブフォルダコレクション
+    /// </summary>
+    public class FolderArchiveCollection : FolderCollection
+    {
+        // Fields
+
+        private readonly ArchiveEntryCollectionMode _mode;
+        private ArchiveEntryCollection? _collection;
+
+
+        // Constructors
+
+        public FolderArchiveCollection(QueryPath path, ArchiveEntryCollectionMode mode, bool isActive, bool isOverlayEnabled) : base(path, isOverlayEnabled)
+        {
+            _mode = mode;
+        }
+
+        public override async Task InitializeItemsAsync(CancellationToken token)
+        {
+            await InitializeItemsAsync(null, token);
+        }
+
+        public async Task InitializeItemsAsync(FolderOrder? folderOrderHint, CancellationToken token)
+        {
+            token.ThrowIfCancellationRequested();
+
+            try
+            {
+                _collection = new ArchiveEntryCollection(this.Place.SimplePath, ArchiveEntryCollectionMode.CurrentDirectory, _mode, ArchiveEntryCollectionOption.None, ArchiveHint.None);
+            }
+            catch
+            {
+                SetItems([]);
+                return;
+            }
+
+            List<ArchiveEntry> entries;
+            switch (_mode)
+            {
+                case ArchiveEntryCollectionMode.CurrentDirectory:
+                    entries = (await _collection.GetEntriesWhereBookAsync(false, token)).ToArchiveEntryCollection();
+                    break;
+                case ArchiveEntryCollectionMode.IncludeSubDirectories:
+                    entries = (await _collection.GetEntriesWhereSubArchivesAsync(false, token)).ToArchiveEntryCollection();
+                    break;
+                default:
+                    SetItems([]);
+                    return;
+            }
+
+            var items = entries
+                .Select(e => _folderItemFactory.CreateFolderItem(e, _collection.Path))
+                .Where(e => e != null)
+                .ToList();
+
+            var folderOrder = folderOrderHint.HasValue ? folderOrderHint.Value : FolderOrder;
+            var list = Sort(items, folderOrder, token);
+
+            SetItems(list);
+        }
+
+
+        // Properties
+
+        public override FolderOrderClass FolderOrderClass => FolderOrderClass.Normal;
+
+
+        // Methods
+
+        /// <summary>
+        /// フォルダーリスト上での親フォルダーを取得
+        /// </summary>
+        public override QueryPath? GetParentQuery()
+        {
+            if (Place == null)
+            {
+                return null;
+            }
+            else if (_collection == null)
+            {
+                return new QueryPath(ArchiveManager.Current.GetExistPathName(Place.SimplePath));
+            }
+            else
+            {
+                return new QueryPath(_collection.GetFolderPlace());
+            }
+        }
+    }
+}

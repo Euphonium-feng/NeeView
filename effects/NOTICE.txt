@@ -1,0 +1,25 @@
+NeeView effects / shader notices
+
+This directory contains third-party shader sources. They are not covered by the
+MIT license of the NeeView application unless their own header says otherwise.
+
+License summary
+- Common/Nearest.hlsl, Common/Bilinear.hlsl, Common/Lanczos.hlsl, Common/Jinc.hlsl,
+  Common/Bicubic.hlsl, Common/SGSR.hlsl:
+  see the source headers for the upstream URL and license.
+- Downscale/SSimDownscaler.hlsl:
+  see the source header for the upstream URL and license.
+- Upscale/FSR/FSR_EASU.hlsl, Upscale/FSR/FSR_RCAS.hlsl, Upscale/NIS/NIS.hlsl,
+  Upscale/Anime4K/*.hlsl:
+  see the source headers for the upstream URL and license.
+- CuNNy2, RAVU, NNEDI3:
+  GPLv3. These files are GPLv3-licensed and require the GPLv3 text and source
+  availability when redistributed.
+
+The application distribution must include THIRD_PARTY_NOTICES and the complete
+GPLv3 text if GPLv3 shaders are included. The original project URLs and any
+modifications are recorded in the shader headers.
+
+Source and modifications
+The files are derived from Magpie, FidelityFX-FSR, NVIDIA Image Scaling,
+Anime4K, and libretro shader sources. See each file header for the exact URL.

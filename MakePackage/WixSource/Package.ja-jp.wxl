@@ -1,0 +1,8 @@
+﻿<WixLocalization xmlns="http://wixtoolset.org/schemas/v4/wxl" Culture="ja-jp" Codepage="932">
+    <String Id="language" Value="1041" />
+    <String Id="codepage" Value="932" />
+    <String Id="downgradeErrorMessage" Value="新しいバージョンのNeeViewが既にインストール済です。" />
+    <String Id="openInNeeView" Value="NeeViewで開く(&amp;V)" />
+    <String Id="contextMenuFeatureDescription" Value="コンテキストメニューに「NeeViewで開く」を追加します。" />
+    <String Id="perMachineErrorMessage" Value="古いバージョンが既にインストールされています。続行する前にアンインストールしてください。新しいバージョンはユーザーごとにインストールされます。"/>
+</WixLocalization>

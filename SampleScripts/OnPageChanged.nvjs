@@ -1,0 +1,25 @@
+// Scripts with the special name OnPageChanged.nvjs are automatically executed when the page is changed.
+//
+// @name Page start processing
+// @description Event when a page is opened
+
+// Example: Change the background based on the file extension. When displaying two pages, refer to the extension of the first page.
+
+var backgroundType = "Black"
+var page = nv.Book.ViewPages[0]
+
+if (page != null) {
+    var path = page.Path
+
+    if (System.IO.File.Exists(path)) {
+        var ext = path.split(".").pop().toLowerCase()
+
+        if (ext == "png" || ext == "svg") {
+            backgroundType = "Check"
+        }
+    }
+}
+    
+nv.Config.Background.BackgroundType = backgroundType
+
+

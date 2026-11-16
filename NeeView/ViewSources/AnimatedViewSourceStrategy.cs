@@ -1,0 +1,54 @@
+﻿using NeeView.ComponentModel;
+using System;
+using System.Diagnostics;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Media.Imaging;
+
+namespace NeeView
+{
+    public class AnimatedViewSourceStrategy : IViewSourceStrategy
+    {
+
+        public AnimatedViewSourceStrategy()
+        {
+        }
+
+
+        public async Task<DataSource> LoadCoreAsync(PageDataSource data, Size size, CancellationToken token)
+        {
+            if (data.Data is not AnimatedPageData pageData) throw new InvalidOperationException(nameof(data.Data));
+
+            // TODO: この画像が何度も読み込まれてないか調査すること
+            var image = await LoadImageAsync(pageData.MediaSource, token);
+
+            // 色情報とBPP設定。
+            if (image is not null)
+            {
+                data.PictureInfo?.SetPixelInfo(image);
+            }
+
+            var viewData = new AnimatedViewData(pageData.MediaSource, image);
+            return new DataSource(viewData, 0, null);
+        }
+
+
+        // TODO: Async
+        private async Task<BitmapSource?> LoadImageAsync(MediaSource mediaSource, CancellationToken token)
+        {
+            try
+            {
+                using (var stream = await mediaSource.OpenStreamAsync(token))
+                {
+                    return DefaultBitmapFactory.Create(stream, null, Size.Empty, token);
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"ImageLoadFailed: {ex.Message}");
+                return null;
+            }
+        }
+    }
+}

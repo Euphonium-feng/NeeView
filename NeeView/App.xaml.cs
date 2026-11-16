@@ -1,0 +1,651 @@
+﻿using NeeView.Native;
+using NeeView.Properties;
+using NeeView.Text.SimpleHtmlBuilder;
+using NeeView.Windows;
+using System;
+using System.Diagnostics;
+using System.Globalization;
+using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Interop;
+using System.Windows.Media;
+using Windows.Win32;
+
+namespace NeeView
+{
+    /// <summary>
+    /// App.xaml の相互作用ロジック
+    /// </summary>
+    public partial class App : Application
+    {
+        private static App? _current;
+        public static new App Current => _current ?? throw new InvalidOperationException("_current must not be null");
+
+
+        private bool _isSplashScreenVisible;
+        private bool _isTerminated;
+        private readonly int _tickBase = System.Environment.TickCount;
+        private CommandLineOption? _option;
+        private MultiBootService? _multiBootService;
+        private readonly AppProcess _appProcess = new();
+
+
+        /// <summary>
+        /// オプション設定
+        /// </summary>
+        public CommandLineOption Option => _option ?? throw new InvalidOperationException("_option must not be null");
+
+        /// <summary>
+        /// システムロック
+        /// </summary>
+        public System.Threading.Lock Lock { get; } = new();
+
+        /// <summary>
+        /// 起動日時
+        /// </summary>
+        public DateTime StartTime { get; private set; }
+
+        /// <summary>
+        /// 開発用：ストップウォッチ
+        /// </summary>
+        public Stopwatch Stopwatch { get; private set; } = new();
+
+        /// <summary>
+        /// MainWindowはLoad完了している？
+        /// </summary>
+        public bool IsMainWindowLoaded { get; set; }
+
+        /// <summary>
+        /// アプリの起動時間(ms)取得
+        /// </summary>
+        public int TickCount => System.Environment.TickCount - _tickBase;
+
+        /// <summary>
+        /// トレースログは有効？
+        /// </summary>
+        public bool IsTraceLogEnabled { get; set; }
+
+        /// <summary>
+        /// データ初期化シーケンス
+        /// </summary>
+        public AppSequence Sequence { get; } = new();
+
+
+        /// <summary>
+        /// Startup
+        /// </summary>
+        private async void Application_Startup(object sender, StartupEventArgs e)
+        {
+            _current = this;
+
+            StartTime = DateTime.Now;
+            Stopwatch.Start();
+
+            // DLL 検索パスから現在の作業ディレクトリ (CWD) を削除
+            PInvoke.SetDllDirectory("");
+
+            // 起動処理排他ロック取得。時間内 (30sec) に獲得できなければアプリ終了
+            var bootLock = new BootProcessLock(30 * 1000);
+            var bootLockKey = bootLock.Lock();
+
+            this.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+
+            try
+            {
+#if !DEBUG
+                Trace.Listeners.Clear();
+#endif
+
+                // [開発用] ログ出力設定
+                if (!string.IsNullOrEmpty(Environment.LogFile))
+                {
+                    var traceListener = new TextWriterTraceListener(Environment.LogFile, "TraceLog");
+                    Trace.Listeners.Add(traceListener);
+                    Trace.AutoFlush = true;
+                    Trace.WriteLine(System.Environment.NewLine + new string('=', 80));
+                    IsTraceLogEnabled = true;
+                }
+
+                Trace.WriteLine($"App.Startup: PID={System.Environment.ProcessId}: {DateTime.Now}");
+
+                // ソフトウェアレンダリング
+                if (AppSettings.Current.SoftwareRendering)
+                {
+                    Trace.WriteLine("Software Rendering: ON");
+                    RenderOptions.ProcessRenderMode = RenderMode.SoftwareOnly;
+                }
+
+                // 未処理例外ハンドル
+                InitializeUnhandledException();
+
+                await InitializeAsync(e);
+            }
+            catch (OperationCanceledException ex)
+            {
+                Trace.WriteLine("InitializeCancelException: " + ex.Message);
+                bootLockKey.Dispose();
+
+                if (ex is OperationCanceledWithDialogException dialogException)
+                {
+                    dialogException.ShowDialog();
+                }
+
+                ShutdownWithoutSave();
+                return;
+            }
+            finally
+            {
+                bootLockKey.Dispose();
+                bootLock.Dispose();
+            }
+
+            Debug.WriteLine($"App.Initialized: {Stopwatch.ElapsedMilliseconds}ms");
+
+            // ToolTipService default properties
+            ToolTipService.BetweenShowDelayProperty.OverrideMetadata(typeof(DependencyObject), new FrameworkPropertyMetadata(0));
+
+            this.ShutdownMode = ShutdownMode.OnMainWindowClose;
+
+            // メインウィンドウ起動
+            Trace.WriteLine("Create MainWindow");
+            var mainWindow = new MainWindow();
+            WindowParameters.Initialize(mainWindow);
+
+            NVInterop.NVFpReset();
+
+            Trace.WriteLine("Show MainWindow");
+            mainWindow.Show();
+
+            MessageDialog.IsShowInTaskBar = false;
+        }
+
+        /// <summary>
+        /// 指定プロセスの終了を待機
+        /// </summary>
+        /// <param name="pid"></param>
+        private static async Task WaitForProcessExitAsync(int pid)
+        {
+            try
+            {
+                var proc = Process.GetProcessById(pid);
+                await proc.WaitForExitAsync();
+            }
+            catch
+            {
+            }
+        }
+
+        /// <summary> 
+        /// 初期化 
+        /// </summary>
+        private async Task InitializeAsync(StartupEventArgs e)
+        {
+            Debug.WriteLine($"App.InitializeAsync...: {Stopwatch.ElapsedMilliseconds}ms");
+
+            this.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+
+            // コマンドライン引数処理
+            Trace.WriteLine("Parse commandline options");
+            _option = ParseCommandLineOption(e.Args);
+
+            // 待機プロセス指定があれば、そのプロセスの終了を待つ
+            if (_option.WaitProcess is not null && int.TryParse(_option.WaitProcess, out var pid))
+            {
+                Trace.WriteLine($"Wait other process exit ({pid})");
+                await WaitForProcessExitAsync(pid);
+            }
+
+            // AnimatedImage ライブラリ初期化
+            Trace.WriteLine("Initialize AnimatedImage");
+            AnimatedImageChecker.InitializeLibrary();
+
+            // APPXデータフォルダ移動 (ver.38)
+            Trace.WriteLine("Correct LocalAppDataFolder (v38.0)");
+            Environment.CorrectLocalAppDataFolder();
+
+            // カレントディレクトリを実行ファイルの場所に変更。ファイルロック回避のため
+            System.IO.Directory.SetCurrentDirectory(Environment.AssemblyFolder);
+
+            // 多重起動サービス起動
+            Trace.WriteLine("Run multi boot service");
+            _multiBootService = new MultiBootService();
+            await _multiBootService.UpdateServerProcess();
+
+            // セカンドプロセス判定
+            Environment.IsSecondProcess = _multiBootService.IsServerExists;
+
+            DebugStamp("UserSettingLoading...");
+
+            // load UserSetting bytes
+            Trace.WriteLine("Load UserSetting bytes");
+            UserSetting? setting = null;
+            var settingResource = new UserSettingResource(_option.SettingFilename);
+
+            // create boot setting
+            Trace.WriteLine("Create boot setting");
+            var boot = settingResource.LoadBootSetting();
+            if (boot is null)
+            {
+                Trace.WriteLine("Create full setting");
+                setting = CreateUserSetting(settingResource);
+                Debug.Assert(setting.Config is not null);
+                boot = BootSetting.Create(setting.Config);
+            }
+
+            // If multiple launches are not possible, send parameters to the main app to terminate.
+            if (!CanStart(boot.IsMultiBootEnabled))
+            {
+                Trace.WriteLine("Call main app...");
+                await _multiBootService.RemoteRestartAsync(e.Args);
+                throw new OperationCanceledException("Already started.");
+            }
+
+            // run remote command server
+            Trace.WriteLine("Run remote command server");
+            AppRemoteCommandServer.Current.Start();
+
+            // show splash screen
+            Trace.WriteLine("Show splash screen");
+            ShowSplashScreen(boot);
+
+            // initialize before UserSetting
+            Trace.WriteLine("Initialize Text Resource");
+            var language = _option.Language ?? boot.Language;
+            InitializeTextResource(language);
+
+            Trace.WriteLine("Initialize HtmlNode");
+            InitializeHtmlNode();
+
+            Trace.WriteLine("Initialize CommandTable");
+            InitializeCommandTable();
+
+            // ensure UserSetting
+            Trace.WriteLine("Ensure UserSetting");
+            setting ??= CreateUserSetting(settingResource);
+            SaveData.Current.SetUserSettingFileStamp(setting.FileStamp);
+            UserSettingTools.Restore(setting, UserSettingLoadOption.ReplaceConfig);
+
+            // fix language
+            if (_option.Language is null)
+            {
+                Config.Current.System.Language = TextResources.Culture.Name;
+            }
+
+            DebugStamp("UserSettingLoaded");
+
+            // show version dialog
+            if (this.Option.IsVersion)
+            {
+                ShowVersionDialog();
+                throw new OperationCanceledException("Displayed version dialog.");
+            }
+
+            // initialize after UserSetting
+            Trace.WriteLine("Initialize temporary");
+            InitializeTemporary(Config.Current);
+
+            Trace.WriteLine("Initialize ImeKey");
+            InitializeImeKey(Config.Current);
+
+            Trace.WriteLine("Initialize theme");
+            InitializeTheme();
+
+            AppState.Current.Initialize();
+
+            // タスクトレイ起動が指定されているのにタスクトレイが有効でない場合は起動できない
+            if (Option.IsTray == SwitchOption.on && !AppState.Current.IsTaskTrayEnabled)
+            {
+                throw new OperationCanceledException("It cannot be launched because it is already running in the system tray.");
+            }
+        }
+
+        public void SetCommandLineOption(CommandLineOption option)
+        {
+            _option = option;
+        }
+
+        /// <summary>
+        /// コマンドライン引数処理
+        /// </summary>
+        /// <returns></returns>
+        public CommandLineOption ParseCommandLineOption(string[] args)
+        {
+            // コマンドライン引数処理
+            var option = ParseArguments(args);
+            option.Validate();
+
+            // シフトキー起動は新しいウィンドウで
+            if (Keyboard.IsKeyDown(Key.LeftShift) || Keyboard.IsKeyDown(Key.RightShift))
+            {
+                option.IsNewWindow = SwitchOption.on;
+            }
+
+            return option;
+        }
+
+        /// <summary>
+        /// UserSetting 生成
+        /// </summary>
+        private UserSetting CreateUserSetting(UserSettingResource settingResource)
+        {
+            using var span = DebugSpan();
+            try
+            {
+                var setting = settingResource.Load() ?? new UserSetting();
+                return setting.EnsureConfig();
+            }
+            catch (Exception ex)
+            {
+                var dialog = new UserSettingLoadFailedDialog(true);
+                var result = dialog.ShowDialog(ex);
+                if (result != true)
+                {
+                    throw new OperationCanceledException();
+                }
+                return new UserSetting().EnsureConfig();
+            }
+        }
+
+        /// <summary>
+        /// バージョンダイアログを表示
+        /// </summary>
+        private void ShowVersionDialog()
+        {
+            var dialog = new VersionWindow() { WindowStartupLocation = WindowStartupLocation.CenterScreen };
+            dialog.ShowDialog();
+        }
+
+        /// <summary>
+        /// 言語リソース初期化
+        /// </summary>
+        /// <param name="language"></param>
+        private void InitializeTextResource(string language)
+        {
+            using var span = DebugSpan();
+            CultureInfo culture;
+            try
+            {
+                culture = CultureInfo.GetCultureInfo(language);
+            }
+            catch (CultureNotFoundException)
+            {
+                culture = CultureInfo.CurrentCulture;
+            }
+            TextResources.Initialize(culture);
+            InputGestureDisplayString.Initialize(TextResources.Resource);
+
+            // 開発用：テキストリソース検証
+            //TextResources.ValidateAllCultures();
+        }
+
+        /// <summary>
+        /// ヘルプ用 HtmlNode 初期化
+        /// </summary>
+        private void InitializeHtmlNode()
+        {
+            HtmlNode.DefaultTextEvaluator = e => TextResources.Replace(e, true);
+        }
+
+        /// <summary>
+        /// コマンドテーブル初期化
+        /// </summary>
+        private void InitializeCommandTable()
+        {
+            using var span = DebugSpan();
+            _ = CommandTable.Current;
+        }
+
+        /// <summary>
+        /// テンポラリーの場所
+        /// </summary>
+        private void InitializeTemporary(Config config)
+        {
+            using var span = DebugSpan();
+            config.System.TemporaryDirectory = Temporary.Current.SetDirectory(config.System.TemporaryDirectory, true);
+        }
+
+        /// <summary>
+        /// TextBox以外のコントロールのIMEキー設定
+        /// </summary>
+        private void InitializeImeKey(Config config)
+        {
+            using var span = DebugSpan();
+            if (!config.System.IsInputMethodEnabled)
+            {
+                InputMethod.IsInputMethodEnabledProperty.OverrideMetadata(typeof(FrameworkElement), new FrameworkPropertyMetadata(false));
+                InputMethod.IsInputMethodEnabledProperty.OverrideMetadata(typeof(System.Windows.Controls.TextBox), new FrameworkPropertyMetadata(true));
+            }
+        }
+
+        /// <summary>
+        /// テーマの初期化
+        /// </summary>
+        private void InitializeTheme()
+        {
+            using var span = DebugSpan();
+            _ = ThemeManager.Current;
+        }
+
+        /// <summary>
+        /// Show SplashScreen
+        /// </summary>
+        public void ShowSplashScreen(BootSetting bootSetting)
+        {
+            if (bootSetting.IsSplashScreenEnabled && CanStart(bootSetting.IsMultiBootEnabled) && !this.Option.IsVersion && Option.IsTray != SwitchOption.on)
+            {
+                if (_isSplashScreenVisible) return;
+                _isSplashScreenVisible = true;
+
+                using var span = DebugSpan();
+                var resourceName = "Resources/SplashScreen.png";
+                var splashScreen = new SplashScreen(resourceName);
+#if DEBUG
+                var topmost = false;
+#else
+                var topmost = true;
+#endif
+                splashScreen.Show(true, topmost);
+            }
+        }
+
+        /// <summary>
+        /// 多重起動用実行可能判定
+        /// </summary>
+        private bool CanStart(bool isMultiBootEnabled)
+        {
+            if (_multiBootService is null)
+            {
+                return false;
+            }
+
+            if (!_multiBootService.IsServerExists)
+            {
+                return true;
+            }
+
+            if (_multiBootService.IsServerBackground)
+            {
+                return false;
+            }
+
+            return Option.IsNewWindow != null ? Option.IsNewWindow == SwitchOption.on : isMultiBootEnabled;
+        }
+
+        /// <summary>
+        /// 終了処理
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        private void Application_Exit(object sender, ExitEventArgs e)
+        {
+            Trace.WriteLine("App.Exit:");
+            Terminate(true);
+
+            _appProcess.StartProcessIfOrdered();
+        }
+
+        /// <summary>
+        /// PCシャットダウン時に呼ばれる
+        /// </summary>
+        private void Application_SessionEnding(object sender, SessionEndingCancelEventArgs e)
+        {
+            Trace.WriteLine($"App.SessionEnding: {e.ReasonSessionEnding}");
+
+            // Closing を成功させるために先にタスクトレイを無効化する
+            AppState.Current.Shutdown(runShutdown: false);
+
+            _appProcess.Cancel();
+
+            (this.MainWindow as MainWindow)?.FinalizeMainWindow();
+
+            Terminate(false);
+        }
+
+        /// <summary>
+        /// 終了時処理。設定の保存等
+        /// </summary>
+        private void Terminate(bool callProcessTerminator)
+        {
+            if (_isTerminated) return;
+            _isTerminated = true;
+
+            AppState.Current.Dispose();
+
+            AppRemoteCommandServer.Current.Dispose();
+
+            TerminateUnhandledException();
+
+            try
+            {
+                // 現在のブックを履歴に保存
+                PageFrameBoxPresenter.Current.ForceSaveBookMemento();
+                PageFrameBoxPresenter.Current.SaveLastBookMemento();
+
+                // 現在の本棚の場所を保存
+                BookshelfFolderList.Current.SaveLastFolderPath();
+                BookmarkFolderList.Current.SaveLastFolderPath();
+
+                // 各種Dispose
+                ApplicationDisposer.Current.Dispose();
+
+                if (App.Current.IsMainWindowLoaded)
+                {
+                    // 設定保存
+                    SaveDataSync.Current.DisposeWatcher();
+                    SaveDataSync.Current.SaveAll(false);
+                    SaveDataSync.Current.Dispose();
+                    SaveData.Current.DisableSave();
+
+                    // キャッシュDBのクリーンナップ
+                    ThumbnailCache.Current.Cleanup();
+
+                    // キャッシュDBを閉じる
+                    ThumbnailCache.Current.Dispose();
+
+                    // DBを閉じる
+                    Database.DisposeIfExists();
+
+                    // テンポラリファイル破棄
+                    Temporary.Current.RemoveTempFolder();
+                }
+
+                Trace.WriteLine($"App.Terminate: {DateTime.Now}: Terminated.");
+            }
+            catch (Exception ex)
+            {
+                Debug.Assert(false, "Application Terminate failed!!");
+                Trace.Fail($"App.Terminate: {DateTime.Now}: {ex.ToStackString()}");
+                throw;
+            }
+
+            if (callProcessTerminator)
+            {
+                try
+                {
+                    CallProcessTerminator();
+                }
+                catch (Exception ex)
+                {
+                    Debug.Assert(false, "Cannot start Terminator.");
+                    Trace.Fail($"Cannot start Terminator: {ex.Message}");
+                }
+            }
+        }
+
+        /// <summary>
+        /// 自プロセスがゾンビ化しても停止させる処理。
+        /// 現象ではPdfDocumentによってゾンビプロセス化してしまうため。
+        /// </summary>
+        /// <seealso href="https://github.com/microsoft/CsWinRT/issues/1249"/>
+        private static void CallProcessTerminator()
+        {
+            // NOTE: PdfDocument を使用していないので不要
+#if false
+            // NOTE: PDFでWinRTのレンダラーを使用している場合のみ機能させる
+            if (PdfArchiveConfig.GetPdfRenderer() != PdfRenderer.WinRT) return;
+
+            var filename = Path.Combine(Environment.LibrariesPath, "Libraries\\NeeView.Terminator.exe");
+
+            // 開発中は直接プロジェクトを参照する
+            if (Environment.IsDevPackage)
+            {
+                filename = Path.GetFullPath(Path.Combine(Environment.AssemblyFolder, @"..\..\..\..\..\NeeView.Terminator\bin", Environment.PlatformName, Environment.ConfigType, @"net10.0\NeeView.Terminator.exe"));
+            }
+
+            // 5秒後にこのプロセスが残っていたら強制終了させる監視プロセスを発行
+            int timeout = 5000;
+            var process = Process.GetCurrentProcess();
+            var info = new ProcessStartInfo();
+            info.UseShellExecute = false;
+            info.CreateNoWindow = true;
+            info.FileName = filename;
+            info.Arguments = $"{process.Id} \"{process.ProcessName}\" {process.StartTime.ToFileTime()} {timeout}";
+            Process.Start(info);
+#endif
+        }
+
+
+        /// <summary>
+        /// 保存しないでアプリをシャットダウン
+        /// </summary>
+        public void ShutdownWithoutSave()
+        {
+            SaveData.Current.DisableSave();
+            Shutdown();
+        }
+
+
+        /// <summary>
+        /// 再起動
+        /// </summary>
+        /// <param name="args">コマンドライン引数</param>
+        public void Reboot(string[] args)
+        {
+            _appProcess.Order(args);
+            ShutdownWithoutSave();
+        }
+
+        #region Develop
+
+        private IDisposable? DebugSpan([CallerMemberName] string callerMethodName = "")
+        {
+#if DEBUG
+            return new DebugSpanScope(Stopwatch, "App." + callerMethodName);
+#else
+            return null;
+#endif
+        }
+
+        [Conditional("DEBUG")]
+        private void DebugStamp(string label)
+        {
+            DebugSpanScope.Dump(Stopwatch, "App." + label);
+        }
+
+        #endregion Develop
+    }
+
+}

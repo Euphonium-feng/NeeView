@@ -1,0 +1,339 @@
+﻿<UserControl x:Class="NeeView.PageListBox"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:b="http://schemas.microsoft.com/xaml/behaviors"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:NeeView"
+             xmlns:properties="clr-namespace:NeeView.Properties"
+             xmlns:nw="clr-namespace:NeeView.Windows"
+             xmlns:vwp="clr-namespace:WpfToolkit.Controls;assembly=VirtualizingWrapPanel"
+             mc:Ignorable="d" 
+             d:DesignHeight="300" d:DesignWidth="300"
+             Foreground="{DynamicResource Panel.Foreground}">
+
+    <UserControl.Resources>
+
+        <Pen x:Key="pen_folder" Brush="{DynamicResource Panel.Foreground}" Thickness="1.25"/>
+
+        <DrawingImage x:Key="fic_folder">
+            <DrawingImage.Drawing>
+                <GeometryDrawing Pen="{StaticResource pen_folder}" Geometry="{StaticResource g_folder}" />
+            </DrawingImage.Drawing>
+        </DrawingImage>
+
+        <DrawingImage x:Key="fic_folder_zip">
+            <DrawingImage.Drawing>
+                <GeometryDrawing Pen="{StaticResource pen_folder}" Geometry="{StaticResource g_folder_zip}" />
+            </DrawingImage.Drawing>
+        </DrawingImage>
+
+        <DrawingImage x:Key="fic_folder_media">
+            <DrawingImage.Drawing>
+                <GeometryDrawing Pen="{StaticResource pen_folder}" Geometry="{StaticResource g_folder_media}" />
+            </DrawingImage.Drawing>
+        </DrawingImage>
+
+        <DrawingImage x:Key="ic_bookmark_24px">
+            <DrawingImage.Drawing>
+                <GeometryDrawing Brush="{DynamicResource PlaylistItemIcon.Foreground}" Pen="{x:Null}" Geometry="{StaticResource g_bookmark_24px}" />
+            </DrawingImage.Drawing>
+        </DrawingImage>
+
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+        <local:BooleanToVisibilityConverter x:Key="BooleanToVisibilityHiddenConverter" False="Hidden"/>
+        <local:BooleanToInverseVisibilityConverter x:Key="BooleanToInverseVisibilityConverter"/>
+        <local:BooleanToTextWrappingConverter x:Key="BooleanToTextWrappingConverter"/>
+        <local:PageNameFormatConverter x:Key="PageNameFormatConverter"/>
+        <local:PageToNoteConverter x:Key="PageToNoteConverter"/>
+        <local:ArchivePageToVisibilityConverter x:Key="ArchviePageToVisibilityConverter"/>
+        <local:BrushAlphaToVisibilityConverter x:Key="BrushAlphaToVisibilityConverter" />
+        <local:PendingCountToOpacityConverter x:Key="PendingCountToOpacityConverter" />
+        <local:ArchivePageToFolderImageSourceConverter x:Key="ArchivePageToFolderImageSourceConverter" FolderImageSource="{StaticResource fic_folder}" FolderZipImageSource="{StaticResource fic_folder_zip}" FolderMediaImageSource="{StaticResource fic_folder_media}"/>
+        <local:BrushOpacityConverter x:Key="BrushOpacityConverter" />
+
+        <nw:BindingProxy x:Key="PanelBackgroundProxy" Data="{DynamicResource Panel.Background}" />
+
+        <Style x:Key="NameStyle" TargetType="TextBlock">
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            <Setter Property="HorizontalAlignment" Value="Left"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Text">
+                <Setter.Value>
+                    <MultiBinding Converter="{StaticResource PageNameFormatConverter}">
+                        <Binding />
+                        <Binding Source="{x:Static local:Config.Current}" Path="PageList.Format"/>
+                        <Binding Path="EntryName"/>
+                    </MultiBinding>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="NormalNameStyle" TargetType="TextBlock" BasedOn="{StaticResource NameStyle}">
+        </Style>
+
+        <Style x:Key="ContentNameStyle" TargetType="TextBlock" BasedOn="{StaticResource NameStyle}">
+            <Setter Property="TextWrapping" Value="{Binding Source={x:Static local:Config.Current}, Path=Panels.ContentItemProfile.IsTextWrapped, Converter={StaticResource BooleanToTextWrappingConverter}}"/>
+            <Setter Property="Height" Value="{Binding Source={x:Static local:Config.Current}, Path=Panels.ContentItemProfile.LayoutedTextHeight}"/>
+        </Style>
+
+        <Style x:Key="BannerrNameStyle" TargetType="TextBlock" BasedOn="{StaticResource NameStyle}">
+            <Setter Property="TextWrapping" Value="{Binding Source={x:Static local:Config.Current}, Path=Panels.BannerItemProfile.IsTextWrapped, Converter={StaticResource BooleanToTextWrappingConverter}}"/>
+            <Setter Property="Height" Value="{Binding Source={x:Static local:Config.Current}, Path=Panels.BannerItemProfile.LayoutedTextHeight}"/>
+        </Style>
+
+        <Style x:Key="ThumbnailNameStyle" TargetType="TextBlock" BasedOn="{StaticResource NameStyle}">
+            <Setter Property="Visibility" Value="{Binding Source={x:Static local:Config.Current}, Path=Panels.ThumbnailItemProfile.IsTextVisible, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+            <Setter Property="TextWrapping" Value="{Binding Source={x:Static local:Config.Current}, Path=Panels.ThumbnailItemProfile.IsTextWrapped, Converter={StaticResource BooleanToTextWrappingConverter}}"/>
+            <Setter Property="Height" Value="{Binding Source={x:Static local:Config.Current}, Path=Panels.ThumbnailItemProfile.TextHeight}"/>
+        </Style>
+
+        <Style x:Key="OverrideIconStackPanelStyle" TargetType="StackPanel">
+            <Setter Property="Visibility" Value="{Binding Source={x:Static local:Config.Current}, Path=Panels.ThumbnailItemProfile.IsTextVisible, Converter={StaticResource BooleanToInverseVisibilityConverter}}"/>
+            <Setter Property="Orientation" Value="Horizontal"/>
+            <Setter Property="VerticalAlignment" Value="Bottom"/>
+            <Setter Property="HorizontalAlignment" Value="Right"/>
+            <Setter Property="Margin" Value="2,4"/>
+            <Setter Property="Effect">
+                <Setter.Value>
+                    <DropShadowEffect ShadowDepth="1" Opacity="0.5"/>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="NoteTextStyle" TargetType="TextBlock" >
+            <Setter Property="Margin" Value="5,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            <Setter Property="Foreground" Value="{DynamicResource Panel.Note}" />
+            <Setter Property="Visibility" Value="{Binding Foreground, RelativeSource={RelativeSource Mode=Self}, Converter={StaticResource BrushAlphaToVisibilityConverter}}" />
+        </Style>
+
+
+        <Style x:Key="VerticalSelectedStyle" TargetType="Rectangle">
+            <Setter Property="Width" Value="4"/>
+            <Setter Property="Margin" Value="0,0,0,0"/>
+            <Setter Property="Fill" Value="{DynamicResource SelectedMark.Foreground}"/>
+            <Setter Property="Visibility" Value="{Binding IsVisible, Converter={StaticResource BooleanToVisibilityHiddenConverter}}"/>
+        </Style>
+
+        <Style x:Key="HorizontalSelectedStyle" TargetType="Rectangle">
+            <Setter Property="Height" Value="4"/>
+            <Setter Property="Margin" Value="0,0,0,0"/>
+            <Setter Property="Fill" Value="{DynamicResource SelectedMark.Foreground}"/>
+            <Setter Property="Visibility" Value="{Binding IsVisible, Converter={StaticResource BooleanToVisibilityHiddenConverter}}"/>
+        </Style>
+
+        <Style x:Key="PageMarkStyle" TargetType="Image" >
+            <Setter Property="Width" Value="16"/>
+            <Setter Property="Height" Value="16"/>
+            <Setter Property="Source" Value="{StaticResource ic_bookmark_24px}"/>
+            <Setter Property="Visibility" Value="{Binding IsMarked, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+            <Setter Property="Margin" Value="1" />
+        </Style>
+
+        <Style x:Key="FolderIconStyle" TargetType="Image">
+            <Setter Property="Width" Value="18"/>
+            <Setter Property="Height" Value="18"/>
+            <Setter Property="Source" Value="{Binding Converter={StaticResource ArchivePageToFolderImageSourceConverter}}"/>
+            <Setter Property="Visibility" Value="{Binding Converter={StaticResource ArchviePageToVisibilityConverter}}"/>
+        </Style>
+
+        <Style x:Key="DetailToolTipDockPanel" TargetType="{x:Type DockPanel}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding ElementName=Root, Path=DataContext.DetailToolTip.IsEnabled}" Value="True">
+                    <Setter Property="ToolTip" Value="{Binding Detail}"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="DetailToolTipBasePanel" TargetType="{x:Type Panel}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding ElementName=Root, Path=DataContext.DetailToolTip.IsPanelEnabled}" Value="True">
+                    <Setter Property="ToolTip" Value="{Binding Detail}"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="ThumbnailIconOverlayBorderStyle" TargetType="{x:Type Border}">
+            <Setter Property="Visibility" Value="{Binding Source={x:Static local:Config.Current}, Path=Panels.ThumbnailItemProfile.IsIconOverlay, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+            <Setter Property="Background" Value="{Binding Source={StaticResource PanelBackgroundProxy}, Path=Data, Converter={StaticResource BrushOpacityConverter}, ConverterParameter=0.5}"/>
+        </Style>
+
+        <Style x:Key="ThumbnailIconDockPanelStyle" TargetType="{x:Type DockPanel}" BasedOn="{StaticResource DetailToolTipDockPanel}">
+            <Setter Property="Visibility" Value="{Binding Source={x:Static local:Config.Current}, Path=Panels.ThumbnailItemProfile.IsIconOverlay, Converter={StaticResource BooleanToInverseVisibilityConverter}}"/>
+        </Style>
+
+        <Style x:Key="ThumbnailTextDockPanelStyle" TargetType="{x:Type DockPanel}" BasedOn="{StaticResource DetailToolTipDockPanel}">
+        </Style>
+
+        <DataTemplate x:Key="NormalTemplate">
+            <DockPanel Style="{StaticResource DetailToolTipDockPanel}" MinHeight="20">
+                <Rectangle Style="{StaticResource VerticalSelectedStyle}" />
+                <Image DockPanel.Dock="Right" Style="{StaticResource FolderIconStyle}" Margin="1" />
+                <Image DockPanel.Dock="Right" Style="{StaticResource PageMarkStyle}" Margin="1" />
+                <TextBlock x:Name="FileNameTextBlock" Style="{StaticResource NormalNameStyle}" Margin="5,1" Opacity="{Binding PendingCount, Converter={StaticResource PendingCountToOpacityConverter}}" />
+            </DockPanel>
+        </DataTemplate>
+
+        <DataTemplate x:Key="ContentTemplate">
+            <DockPanel>
+                <Rectangle Style="{StaticResource VerticalSelectedStyle}" />
+                <DockPanel Margin="2" LastChildFill="True">
+                    <local:PanelListContentImage Thumbnail="{Binding Thumbnail}" Opacity="{Binding PendingCount, Converter={StaticResource PendingCountToOpacityConverter}}" />
+                    <DockPanel Style="{StaticResource DetailToolTipDockPanel}">
+                        <Image DockPanel.Dock="Right" Style="{StaticResource FolderIconStyle}" />
+                        <Image DockPanel.Dock="Right" Style="{StaticResource PageMarkStyle}" />
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource NoteTextStyle}" Text="{Binding Converter={StaticResource PageToNoteConverter}}" />
+                            <TextBlock x:Name="FileNameTextBlock" Style="{StaticResource ContentNameStyle}" Margin="5,0" />
+                        </StackPanel>
+                    </DockPanel>
+                </DockPanel>
+            </DockPanel>
+        </DataTemplate>
+
+        <DataTemplate x:Key="BannerTemplate">
+            <DockPanel>
+                <Rectangle Style="{StaticResource VerticalSelectedStyle}" />
+                <DockPanel Margin="0,0" HorizontalAlignment="Stretch" LastChildFill="False">
+                    <DockPanel DockPanel.Dock="Bottom" Style="{StaticResource DetailToolTipDockPanel}" Margin="2">
+                        <Image DockPanel.Dock="Right" Style="{StaticResource FolderIconStyle}" />
+                        <Image DockPanel.Dock="Right" Style="{StaticResource PageMarkStyle}" />
+                        <TextBlock x:Name="FileNameTextBlock" Style="{StaticResource BannerrNameStyle}" />
+                    </DockPanel>
+                    <local:PanelListBannerImage Thumbnail="{Binding Thumbnail}" Opacity="{Binding PendingCount, Converter={StaticResource PendingCountToOpacityConverter}}" />
+                </DockPanel>
+            </DockPanel>
+        </DataTemplate>
+
+        <DataTemplate x:Key="ThumbnailTemplate">
+            <StackPanel Style="{StaticResource DetailToolTipBasePanel}" Margin="5" Width="{Binding Source={x:Static local:Config.Current}, Path=Panels.ThumbnailItemProfile.ShapeWidth}">
+                <Grid>
+                    <local:PanelListThumbnailImage Thumbnail="{Binding Thumbnail}" Opacity="{Binding PendingCount, Converter={StaticResource PendingCountToOpacityConverter}}" />
+                    <Border Style="{StaticResource ThumbnailIconOverlayBorderStyle}" VerticalAlignment="Bottom" HorizontalAlignment="Right" CornerRadius="3,0,0,0">
+                        <Image DockPanel.Dock="Right" Style="{StaticResource FolderIconStyle}" VerticalAlignment="Top" Margin="2,2,0,0"/>
+                    </Border>
+                    <Border Style="{StaticResource ThumbnailIconOverlayBorderStyle}" VerticalAlignment="Top" HorizontalAlignment="Right" CornerRadius="0,0,0,3">
+                        <Image DockPanel.Dock="Right" Style="{StaticResource PageMarkStyle}" VerticalAlignment="Top" Margin="2,0,0,2"/>
+                    </Border>
+                </Grid>
+                <Rectangle DockPanel.Dock="Bottom" Style="{StaticResource HorizontalSelectedStyle}" Margin="-5,0,-5,2"/>
+                <DockPanel Style="{StaticResource ThumbnailTextDockPanelStyle}">
+                    <DockPanel DockPanel.Dock="Right" Style="{StaticResource ThumbnailIconDockPanelStyle}">
+                        <Image DockPanel.Dock="Right" Style="{StaticResource FolderIconStyle}" VerticalAlignment="Top"/>
+                        <Image DockPanel.Dock="Right" Style="{StaticResource PageMarkStyle}" VerticalAlignment="Top"/>
+                    </DockPanel>
+                    <TextBlock x:Name="FileNameTextBlock" Style="{StaticResource ThumbnailNameStyle}" HorizontalAlignment="Center"/>
+                </DockPanel>
+            </StackPanel>
+        </DataTemplate>
+
+        <Style x:Key="ListBoxItemStyle" TargetType="ListBoxItem" BasedOn="{StaticResource NVListBoxItem}">
+            <EventSetter Event="PreviewMouseLeftButtonDown" Handler="PageListItem_MouseLeftButtonDown" />
+            <EventSetter Event="PreviewMouseLeftButtonUp" Handler="PageListItem_MouseLeftButtonUp" />
+            <EventSetter Event="MouseDoubleClick" Handler="PageListItem_MouseDoubleClick" />
+            <EventSetter Event="ContextMenuOpening" Handler="PageListItem_ContextMenuOpening" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource NVListItemFocusVisual}" />
+            <Setter Property="ContextMenu">
+                <Setter.Value>
+                    <ContextMenu />
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ListBoxItemBorderStyle" TargetType="ListBoxItem" BasedOn="{StaticResource ListBoxItemStyle}">
+            <Setter Property="BorderBrush" Value="{DynamicResource Item.Separator}" />
+        </Style>
+
+        <Style x:Key="ListBoxItemThumbnailStyle" TargetType="{x:Type ListBoxItem}" BasedOn="{StaticResource ListBoxItemStyle}">
+            <Setter Property="local:ListBoxItemTools.InnerMargin" Value="0" />
+        </Style>
+
+    </UserControl.Resources>
+
+    <Grid x:Name="Root">
+
+        <nw:ListBoxExtended x:Name="ListBox" Focusable="True"
+                 FontSize="{DynamicResource PanelFontSize}"
+                 Background="Transparent"
+                 Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                 FocusVisualStyle="{x:Null}"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                 HorizontalContentAlignment="Stretch"
+                 ItemsSource="{Binding CollectionViewSource.View, NotifyOnTargetUpdated=True}"
+                 SelectedItem="{Binding Model.SelectedItem}"
+                 SelectionChanged="PageList_SelectionChanged"
+                 PreviewMouseLeftButtonDown="PageList_MouseLeftButtonDown"
+                 KeyDown="PageList_KeyDown"
+                 KeyUp="PageList_KeyUp"
+                 IsVisibleChanged="PageList_IsVisibleChanged"
+                 TargetUpdated="PageList_TargetUpdated"
+                 SelectionMode="Extended"
+                 IsSimpleTextSearchEnabled="{Binding Source={x:Static local:Config.Current}, Path=Panels.IsTextSearchEnabled}"
+                 VirtualizingPanel.IsVirtualizing="True"
+                 VirtualizingPanel.ScrollUnit="{StaticResource PanelScrollUnit}"
+                 VirtualizingPanel.VirtualizationMode="Recycling"
+                 VirtualizingPanel.IsVirtualizingWhenGrouping="True">
+
+            <b:Interaction.Behaviors>
+                <nw:ListBoxExtendedDragDropStartBehavior AllowedEffects="Copy, Scroll" AllowRightButtonDrag="True" DragDropFormat="{x:Static local:PageListBox.DragDropFormat}" DragBeginAsync="DragStartBehavior_DragBeginAsync" />
+            </b:Interaction.Behaviors>
+
+            <ListBox.Style>
+                <Style TargetType="{x:Type nw:ListBoxExtended}" BasedOn="{StaticResource NVListBox}">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding Source={x:Static local:Config.Current}, Path=PageList.PanelListItemStyle}" Value="Normal">
+                            <Setter Property="ItemTemplate" Value="{StaticResource NormalTemplate}"/>
+                            <Setter Property="ItemContainerStyle" Value="{StaticResource ListBoxItemStyle}" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding Source={x:Static local:Config.Current}, Path=PageList.PanelListItemStyle}" Value="Content">
+                            <Setter Property="ItemTemplate" Value="{StaticResource ContentTemplate}"/>
+                            <Setter Property="ItemContainerStyle" Value="{StaticResource ListBoxItemBorderStyle}" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding Source={x:Static local:Config.Current}, Path=PageList.PanelListItemStyle}" Value="Banner">
+                            <Setter Property="ItemTemplate" Value="{StaticResource BannerTemplate}"/>
+                            <Setter Property="ItemContainerStyle" Value="{StaticResource ListBoxItemBorderStyle}" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding Source={x:Static local:Config.Current}, Path=PageList.PanelListItemStyle}" Value="Thumbnail">
+                            <Setter Property="ItemTemplate" Value="{StaticResource ThumbnailTemplate}"/>
+                            <Setter Property="ItemContainerStyle" Value="{StaticResource ListBoxItemThumbnailStyle}" />
+                            <Setter Property="FixHomeAndEndKeyBehavior" Value="True"/>
+                            <Setter Property="IsNavigateWithWrapEnabled" Value="True"/>
+                            <Setter Property="MouseWheelSpeedRate" Value="{Binding Source={x:Static local:Config.Current}, Path=Panels.MouseWheelSpeedRate}"/>
+                            <Setter Property="ItemsPanel">
+                                <Setter.Value>
+                                    <ItemsPanelTemplate>
+                                        <vwp:VirtualizingWrapPanel IsItemsHost="True" ItemSize="{Binding ThumbnailItemSize}" />
+                                    </ItemsPanelTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </ListBox.Style>
+
+            <ListBox.GroupStyle>
+                <GroupStyle>
+                    <GroupStyle.HeaderTemplate>
+                        <DataTemplate>
+                            <Border BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Panel.Separator}" Margin="0,15,0,0">
+                                <TextBlock VerticalAlignment="Center" Text="{Binding Name}" Foreground="{DynamicResource Panel.Header}" Margin="0,5" TextTrimming="CharacterEllipsis" />
+                            </Border>
+                        </DataTemplate>
+                    </GroupStyle.HeaderTemplate>
+                    <GroupStyle.Panel>
+                        <ItemsPanelTemplate>
+                            <VirtualizingStackPanel Orientation="Vertical"/>
+                        </ItemsPanelTemplate>
+                    </GroupStyle.Panel>
+                </GroupStyle>
+            </ListBox.GroupStyle>
+
+        </nw:ListBoxExtended>
+
+        <local:BusyFadeView x:Name="BusyFade" Target="{Binding ElementName=ListBox}" Opacity="0"/>
+
+    </Grid>
+
+</UserControl>

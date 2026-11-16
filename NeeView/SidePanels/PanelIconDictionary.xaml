@@ -1,0 +1,90 @@
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="clr-namespace:NeeView">
+
+    <!--#region Icons -->
+
+    <DrawingImage x:Key="pic_bookshelf">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="Transparent" Geometry="{StaticResource g_rect1000x1000}" />
+                <GeometryDrawing Brush="{DynamicResource SideBar.Foreground}" Pen="{x:Null}" Geometry="{StaticResource g_bookshelf}" />
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <DrawingImage x:Key="pic_navigate">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="Transparent" Geometry="{StaticResource g_rect1000x1000}" />
+                <DrawingGroup Transform="0.1,0,0,-0.1,0,502">
+                    <GeometryDrawing Brush="{DynamicResource SideBar.Foreground}" Geometry="{StaticResource g_nagivate}" />
+                </DrawingGroup>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <DrawingImage x:Key="pic_history_24px">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="Transparent" Geometry="{StaticResource g_rect24x24}" />
+                <GeometryDrawing Brush="{DynamicResource SideBar.Foreground}" Pen="{x:Null}" Geometry="{StaticResource g_history_24px}" />
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <DrawingImage x:Key="pic_info_24px">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="Transparent" Geometry="{StaticResource g_rect24x24}" />
+                <GeometryDrawing Brush="{DynamicResource SideBar.Foreground}" Pen="{x:Null}" Geometry="{StaticResource g_info_24px}" />
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <DrawingImage x:Key="pic_toy_24px">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="Transparent" Geometry="{StaticResource g_rect24x24}" />
+                <GeometryDrawing Brush="{DynamicResource SideBar.Foreground}" Pen="{x:Null}" Geometry="{StaticResource g_toy_24px}" />
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <DrawingImage x:Key="pic_photo_library_24px">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="Transparent" Geometry="{StaticResource g_rect24x24}" />
+                <GeometryDrawing Brush="{DynamicResource SideBar.Foreground}" Pen="{x:Null}" Geometry="{StaticResource g_photo_library_24px}" />
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <DrawingImage x:Key="pic_star_24px">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="Transparent" Geometry="{StaticResource g_rect24x24}" />
+                <GeometryDrawing Brush="{DynamicResource SideBar.Foreground}" Pen="{x:Null}" Geometry="{StaticResource g_star_24px}" />
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <DrawingImage x:Key="pic_playlist_24px">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="Transparent">
+                    <GeometryDrawing.Geometry>
+                        <RectangleGeometry Rect="-3,-3,21,21" />
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Geometry="{StaticResource g_playlist_24px}">
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="{DynamicResource Panel.Foreground}" Thickness="1.25" />
+                    </GeometryDrawing.Pen>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!--#endregion Icons-->
+
+
+</ResourceDictionary>

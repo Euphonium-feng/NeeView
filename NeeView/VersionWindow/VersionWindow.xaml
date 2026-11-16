@@ -1,0 +1,93 @@
+﻿<Window x:Class="NeeView.VersionWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:NeeView"
+        xmlns:properties="clr-namespace:NeeView.Properties"
+        mc:Ignorable="d"
+        Style="{StaticResource ChromeDialogStyle}"
+        Title="{properties:TextBinding VersionWindow.Title}" Width="512" SizeToContent="Height" ResizeMode="NoResize" >
+    <Window.Resources>
+
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+
+        <Style TargetType="Hyperlink" BasedOn="{StaticResource NVHyperlink}">
+            <Setter Property="ToolTip" Value="{Binding RelativeSource={RelativeSource Mode=Self}, Path=NavigateUri}"/>
+            <Setter Property="FocusVisualStyle" Value="{StaticResource NVBorderFocusVisual}" />
+            <EventSetter Event="RequestNavigate"  Handler="Hyperlink_RequestNavigate"/>
+        </Style>
+    </Window.Resources>
+
+    <DockPanel MinHeight="280" MinWidth="480">
+
+        <DockPanel DockPanel.Dock="Bottom" LastChildFill="False" Background="{DynamicResource Panel.Background}" >
+            <DockPanel.Resources>
+                <Style x:Key="LinkedTextBlock" TargetType="TextBlock">
+                    <Setter Property="Margin" Value="30,20"/>
+                </Style>
+            </DockPanel.Resources>
+
+            <TextBlock DockPanel.Dock="Left" Style="{StaticResource LinkedTextBlock}">
+                <Hyperlink NavigateUri="{Binding LicenseUri}">
+                    <TextBlock Text="{properties:TextBinding VersionWindow.License}"/>
+                </Hyperlink>
+            </TextBlock>
+
+            <TextBlock DockPanel.Dock="Right" Style="{StaticResource LinkedTextBlock}">
+                <Hyperlink NavigateUri="{Binding ProjectUri}" >
+                    <TextBlock Text="{properties:TextBinding VersionWindow.Project}"/>
+                </Hyperlink>
+            </TextBlock>
+        </DockPanel>
+
+        <DockPanel VerticalAlignment="Center" UseLayoutRounding="True" Background="Transparent">
+
+            <DockPanel.ContextMenu>
+                <ContextMenu x:Name="CopyContextMenu">
+                    <MenuItem Header="{properties:TextBinding VersionWindow.Menu.Copy}" Command="{x:Static local:VersionWindow.CopyCommand}" />
+                </ContextMenu>
+            </DockPanel.ContextMenu>
+
+            <StackPanel DockPanel.Dock="Top" Margin="15" VerticalAlignment="Center">
+                <DockPanel DockPanel.Dock="Top" Margin="0,15">
+                    <Image DockPanel.Dock="Left" Margin="40,0"  Width="64" Height="64" Source="{Binding Icon}" UseLayoutRounding="True" VerticalAlignment="Center"/>
+                    <StackPanel DockPanel.Dock="Top" Margin="0,0,10,0" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding ApplicationName}" FontSize="{DynamicResource SystemFontSizeHuge}" FontFamily="Trebuchet MS"/>
+                        <TextBlock Text="{Binding DisplayVersion}" />
+                    </StackPanel>
+                </DockPanel>
+                <StackPanel HorizontalAlignment="Center" Visibility="{Binding IsCheckerEnabled, Converter={StaticResource BooleanToVisibilityConverter}}" Margin="0,5,0,0" >
+                    <TextBlock Text="{Binding Checker.Message}">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{DynamicResource Control.GrayText}"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Checker.IsExistNewVersion}" Value="True">
+                                        <Setter Property="Foreground" Value="{DynamicResource Window.Foreground}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                    <TextBlock HorizontalAlignment="Center" Margin="0,0,0,0">
+                        <Hyperlink NavigateUri="{Binding Checker.LatestVersionUrl}" IsEnabled="{Binding Checker.IsExistNewVersion}">
+                            <TextBlock Text="{properties:TextBinding VersionWindow.Download}"/>
+                        </Hyperlink>
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Visibility" Value="Hidden"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Checker.IsExistNewVersion}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </StackPanel>
+            </StackPanel>
+        </DockPanel>
+
+    </DockPanel>
+</Window>

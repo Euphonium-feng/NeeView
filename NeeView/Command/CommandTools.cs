@@ -1,0 +1,160 @@
+﻿using NeeView.Properties;
+using System;
+using System.Globalization;
+using System.Text.RegularExpressions;
+using System.Windows.Input;
+
+namespace NeeView
+{
+    public static partial class CommandTools
+    {
+        [GeneratedRegex(@"\(_[A-Z]\)")]
+        private static partial Regex _menuKeywordRegex { get; }
+
+
+        /// <summary>
+        /// コマンド有効判定
+        /// </summary>
+        /// <param name="commandName">コマンドID</param>
+        /// <returns>コマンド有効なら true</returns>
+        public static bool IsCommandEnabled(string? commandName)
+        {
+            if (commandName is null) return false;
+
+            return CommandTable.Current.ContainsKey(commandName);
+        }
+
+
+        /// <summary>
+        /// コマンドの ToolTip 文字列を作成
+        /// </summary>
+        /// <param name="name"></param>
+        /// <param name="key"></param>
+        /// <param name="modifiers"></param>
+        /// <returns></returns>
+        public static string CreateToolTipText(string name, Key key, ModifierKeys modifiers = ModifierKeys.None)
+        {
+            var text = TextResources.GetString(name);
+            var gesture = new KeyGestureSource(key, modifiers)?.GetDisplayString();
+            return string.IsNullOrEmpty(gesture) ? text : $"{text} ({gesture})";
+        }
+
+        /// <summary>
+        /// コマンド表示名取得
+        /// </summary>
+        /// <param name="commandName">コマンドID</param>
+        /// <param name="getCommandTextFunc">テキスト取得関数</param>
+        /// <returns>コマンド表示名</returns>
+        public static string GetCommandText(string? commandName, Func<CommandElement, string> getCommandTextFunc)
+        {
+            if (commandName is null)
+            {
+                return "(none)";
+            }
+
+            if (CommandTable.Current.TryGetValue(commandName, out CommandElement? command))
+            {
+                return getCommandTextFunc(command);
+            }
+
+            if (ScriptCommand.IsScriptCommandName(commandName))
+            {
+                return commandName.Replace(CommandNameSource.Separator, ' ').Replace('_', ' ');
+            }
+
+            var cloneName = CommandNameSource.Parse(commandName);
+            if (cloneName.IsClone)
+            {
+                if (CommandTable.Current.TryGetValue(cloneName.Name, out CommandElement? commandSource))
+                {
+                    return getCommandTextFunc(commandSource) + " " + cloneName.Number.ToString(CultureInfo.InvariantCulture);
+                }
+            }
+
+            return "(none)";
+        }
+
+        /// <summary>
+        /// メニュー文字列に埋め込まれているショートカットキーワードを削除
+        /// </summary>
+        /// <param name="menuText"></param>
+        /// <returns></returns>
+        public static string TrimMenuKeyword(string menuText)
+        {
+            // (_P) -> ""
+            menuText = _menuKeywordRegex.Replace(menuText, "");
+
+            // _ -> ""
+            menuText = menuText.Replace("_", "");
+            menuText = menuText.Trim();
+
+            return menuText;
+        }
+
+        /// <summary>
+        /// CommandContextからトグルモード取得
+        /// </summary>
+        /// <param name="context"></param>
+        /// <returns></returns>
+        public static ToggleMode GetToggleMode(CommandContext context)
+        {
+            if (context.Args.Length > 0)
+            {
+                return Convert.ToBoolean(context.Args[0], CultureInfo.InvariantCulture) ? ToggleMode.On : ToggleMode.Off;
+            }
+
+            if (!context.ByMenu && context.Parameter is ToggleCommandParameter parameter)
+            {
+                return parameter.ToggleMode;
+            }
+
+            return ToggleMode.Toggle;
+        }
+
+        /// <summary>
+        /// 反転情報を解決したコマンドを返す
+        /// </summary>
+        /// <param name="command">元のコマンド</param>
+        /// <param name="allowReverse">反転許可</param>
+        /// <returns>反転が有効な場合はペアコマンド、そうでない場合は元のコマンド</returns>
+        public static CommandElement ResolveCommand(CommandElement command,  bool allowReverse)
+        {
+            if (!allowReverse)
+            {
+                return command;
+            }
+
+            if (command.PairPartner is null)
+            {
+                return command;
+            }
+
+            if (command.Parameter is not ReversibleCommandParameter reversibleParameter || !reversibleParameter.IsReverse)
+            {
+                return command;
+            }
+
+            if (!IsCommandReversed())
+            {
+                return command;
+            }
+
+            if (CommandTable.Current.TryGetValue(command.PairPartner, out var pairCommand))
+            {
+                return pairCommand;
+            }
+
+            throw new InvalidOperationException($"Cannot get PairPartner: {command.PairPartner}");
+        }
+
+        /// <summary>
+        /// コマンド反転が必要な状況か
+        /// </summary>
+        /// <returns>コマンド反転許可かつページスライダーが右向きならば真</returns>
+        public static bool IsCommandReversed()
+        {
+            return Config.Current.Command.IsReversePageMove
+                && MainWindowModel.Current.IsLeftToRightSlider() != (Config.Current.Command.PresetPageReadOrder != PageReadOrder.RightToLeft);
+        }
+    }
+}

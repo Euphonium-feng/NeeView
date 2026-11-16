@@ -1,0 +1,93 @@
+﻿<Window x:Class="NeeView.Setting.EditCommandWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:NeeView.Setting"
+        xmlns:nv="clr-namespace:NeeView"
+        xmlns:nwp="clr-namespace:NeeView.Windows.Property"
+        xmlns:properties="clr-namespace:NeeView.Properties"
+        mc:Ignorable="d"
+        Style="{StaticResource ChromeDialogStyle}"
+        UseLayoutRounding="True"
+        Title="EditCommandWindow" Height="480" Width="640">
+
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Styles/SettingTheme.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <Style x:Key="ButtonStyle" TargetType="Button" BasedOn="{StaticResource NVButton}">
+                <Setter Property="Padding" Value="10,5" />
+                <Setter Property="Margin" Value="5" />
+                <Setter Property="MinWidth" Value="80" />
+                <Setter Property="MinHeight" Value="0" />
+            </Style>
+
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <DockPanel Margin="5">
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="ButtonOk" Style="{StaticResource ButtonStyle}" Content="{properties:TextBinding Word.Close}" Click="ButtonOk_Click"/>
+        </StackPanel>
+        <StackPanel x:Name="ReverseNote" DockPanel.Dock="Bottom" Orientation="Horizontal" Visibility="Collapsed" d:Visibility="Visible">
+            <Image Source="{StaticResource ic_info_24px}" Width="16" Height="16" Margin="5" VerticalAlignment="Center"/>
+            <TextBlock x:Name="ReverseNoteTextBlock" DockPanel.Dock="Bottom" Text="When the slider direction is from left to right, execute [PairCommand]." TextWrapping="Wrap" VerticalAlignment="Center"/>
+        </StackPanel>
+        <TabControl x:Name="TabControl" Margin="5" TabIndex="1" KeyboardNavigation.TabNavigation="Local" >
+            <TabItem x:Name="GeneralTab">
+                <TabItem.Header>
+                    <Grid MinWidth="60" MinHeight="30">
+                        <TextBlock Text="{properties:TextBinding EditCommandWindow.Tab.General}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Grid>
+                </TabItem.Header>
+                <DockPanel Margin="10,20">
+                    <nwp:PropertyInspector x:Name="GeneralInspector" DockPanel.Dock="Top" Document="{Binding GeneralDocument}" KeyboardNavigation.TabNavigation="Local"
+                        IsStretch="True"
+                        IsResetButtonVisible="False"
+                        ColumnRate="0.4"/>
+                    <StackPanel DockPanel.Dock="Bottom" VerticalAlignment="Bottom">
+                        <TextBlock Text="{properties:TextBinding EditCommandWindow.Remarks}" FontWeight="Bold"/>
+                        <TextBlock Text="{Binding Note}" Margin="0,5,0,20" TextWrapping="Wrap"/>
+                        <TextBlock Text="{properties:TextBinding EditCommandWindow.CommandName}" FontWeight="Bold" />
+                        <TextBox Text="{Binding CommandName, Mode=OneWay}" Margin="0,5,0,0" IsReadOnly="True" BorderThickness="0" />
+                    </StackPanel>
+                </DockPanel>
+            </TabItem>
+            <TabItem x:Name="InputGestureTab">
+                <TabItem.Header>
+                    <Grid MinWidth="60" MinHeight="30">
+                        <TextBlock Text="{properties:TextBinding EditCommandWindow.Tab.Shortcut}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Grid>
+                </TabItem.Header>
+                <local:InputGestureSettingControl x:Name="InputGesture"/>
+            </TabItem>
+            <TabItem x:Name="MouseGestureTab">
+                <TabItem.Header>
+                    <Grid MinWidth="60" MinHeight="30">
+                        <TextBlock Text="{properties:TextBinding EditCommandWindow.Tab.Gesture}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Grid>
+                </TabItem.Header>
+                <local:MouseGestureSettingControl x:Name="MouseGesture"/>
+            </TabItem>
+            <TabItem x:Name="InputTouchTab">
+                <TabItem.Header>
+                    <Grid MinWidth="60" MinHeight="30">
+                        <TextBlock Text="{properties:TextBinding EditCommandWindow.Tab.Touch}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Grid>
+                </TabItem.Header>
+                <local:InputTouchSettingControl x:Name="InputTouch"/>
+            </TabItem>
+            <TabItem x:Name="ParameterTab">
+                <TabItem.Header>
+                    <Grid MinWidth="60" MinHeight="30">
+                        <TextBlock Text="{properties:TextBinding EditCommandWindow.Tab.Parameter}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Grid>
+                </TabItem.Header>
+                <local:CommandParameterControl x:Name="Parameter"/>
+            </TabItem>
+        </TabControl>
+    </DockPanel>
+</Window>

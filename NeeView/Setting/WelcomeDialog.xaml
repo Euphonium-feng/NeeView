@@ -1,0 +1,64 @@
+﻿<Window x:Class="NeeView.Setting.WelcomeDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:NeeView.Setting"
+        xmlns:nv="clr-namespace:NeeView"
+        xmlns:nwp="clr-namespace:NeeView.Windows.Property"
+        xmlns:nwc="clr-namespace:NeeView.Windows.Controls"
+        xmlns:nwd="clr-namespace:NeeView.Windows.Data"
+        xmlns:osc="clr-namespace:OpenSourceControls"
+        xmlns:properties="clr-namespace:NeeView.Properties"
+        mc:Ignorable="d"
+        Style="{StaticResource ChromeDialogStyle}"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        Title="{properties:TextBinding WelcomeDialog.Caption}"
+        SizeToContent="Height" Width="928">
+
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Styles/SettingTheme.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <Style x:Key="DisableStyle" TargetType="FrameworkElement">
+                <Style.Triggers>
+                    <Trigger Property="IsEnabled" Value="False">
+                        <Setter Property="Opacity" Value="0.5" />
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+
+            <DataTemplate DataType="{x:Type nwp:PropertyValue_Boolean}">
+                <StackPanel Orientation="Horizontal" Style="{StaticResource DisableStyle}">
+                    <nwc:ToggleSwitch IsChecked="{Binding Value}" Height="20" HorizontalAlignment="Left" ShowState="True"/>
+                </StackPanel>
+            </DataTemplate>
+
+            <DataTemplate DataType="{x:Type nwp:PropertyTitleElement}">
+                <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" FontWeight="Bold" Margin="0,10,0,5" />
+            </DataTemplate>
+
+            <DataTemplate DataType="{x:Type nwp:PropertyMemberElement}">
+                <nwp:PropertyControl Header="{Binding Name}" Value="{Binding TypeValue}" Tips="{Binding Tips}"
+                        ColumnRate="{Binding RelativeSource={RelativeSource AncestorType=UserControl}, Path=ColumnRate}" />
+            </DataTemplate>
+
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <DockPanel x:Name="Root" Margin="30,20" VerticalAlignment="Stretch" HorizontalAlignment="Stretch">
+
+        <Button x:Name="OKButton" DockPanel.Dock="Bottom" Style="{StaticResource NVDialogAccentButton}" HorizontalAlignment="Right" Content="{properties:TextBinding Word.OK}" Click="OKButton_Click" />
+
+        <StackPanel>
+            <TextBlock x:Name="Caption" DockPanel.Dock="Top" VerticalAlignment="Bottom" Text="{properties:TextBinding WelcomeDialog.Title}" TextWrapping="Wrap" FontSize="{DynamicResource SystemFontSizeHuge}" Margin="0,5" />
+            <TextBlock Text="{properties:TextBinding WelcomeDialog.Message}" Margin="0,10"/>
+            <ContentControl x:Name="PageContent" IsTabStop="False" />
+        </StackPanel>
+
+    </DockPanel>
+
+</Window>

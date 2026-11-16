@@ -1,0 +1,7 @@
+// @name Speed up slideshow
+// @description Reduce the time between slide changes by one second.
+
+nv.Config.SlideShow.SlideShowInterval -= 1.0
+
+nv.ShowMessage( "Slideshow Interval = " + nv.Config.SlideShow.SlideShowInterval + " sec." )
+

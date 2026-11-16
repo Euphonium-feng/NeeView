@@ -1,0 +1,247 @@
+﻿<Window x:Class="NeeView.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:NeeView"
+        xmlns:nw="clr-namespace:NeeView.Windows"
+        xmlns:nwc="clr-namespace:NeeView.Windows.Controls"
+        xmlns:properties="clr-namespace:NeeView.Properties"
+        xmlns:behaviors="http://schemas.microsoft.com/xaml/behaviors"
+        mc:Ignorable="d"
+        x:Name="RootWindow"
+        Style="{StaticResource DefaultWindowStyle}"
+        Title="{Binding WindowTitle.Title}"
+        Icon="{Binding WindowIcon}"
+        Topmost="{Binding IsTopmost}"
+        d:DesignHeight="768" d:DesignWidth="1024"
+        MinHeight="300" MinWidth="400"
+        SourceInitialized="MainWindow_SourceInitialized"
+        Loaded="MainWindow_Loaded"
+        ContentRendered="MainWindow_ContentRendered"
+        Closed="MainWindow_Closed"
+        Closing="MainWindow_Closing"
+        Activated="MainWindow_Activated"
+        Deactivated="MainWindow_Deactivated"
+        MouseLeave="MainWindow_MouseLeave"
+        StateChanged="MainWindow_StateChanged"
+        DpiChanged="MainWindow_DpiChanged">
+
+
+    <Window.Resources>
+
+        <ResourceDictionary>
+
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/MainWindow/MainWindowResourceDictionary.xaml" />
+                <ResourceDictionary Source="/SidePanels/PanelIconDictionary.xaml" />
+                <ResourceDictionary Source="/SidePanels/Bookshelf/FolderList/FolderListIconDictionary.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+            <local:IsNearZeroConverter x:Key="IsNearZeroConverter" />
+            <local:SortModeToVisibilityConverter x:Key="SortModeToVisibilityConverter" />
+            <local:SortModeToStringConverter x:Key="SortModeToStringConverter" />
+            <local:SliderDirectionToFlowDirectionConverter x:Key="SliderDirectionToFlowDirectionConverter" />
+            <local:NullableToVisibilityConverter x:Key="NullableToVisibilityConverter" />
+            <local:BooleanReverseConverter x:Key="BooleanReverseConverter" />
+            <local:DoubleOffsetConverter x:Key="AutoHideMarginOffsetConverter" Offset="16" />
+            <local:DoubleSumConverter x:Key="DoubleSumConverter" />
+            <local:TypeToVisibilityConverter x:Key="MainViewToVisibilityConverter" Type="{x:Type local:MainViewBay}" IsInversed="True" />
+
+            <!-- MenuItem History -->
+            <Style x:Key="HistoryMenuItemContainerStyle" TargetType="MenuItem" BasedOn="{StaticResource NVMenuItem}">
+                <Setter Property="Header" Value="{Binding Path=Name}" />
+                <Setter Property="Command" Value="{x:Static local:LoadCommand.Command}" />
+                <Setter Property="CommandParameter" Value="{Binding Path=Path}" />
+                <Setter Property="InputGestureText" Value="" />
+            </Style>
+
+            <!-- MenuItem SelectArchiver -->
+            <Style x:Key="SelectArchiverMenuItemContainerStyle" TargetType="MenuItem" BasedOn="{StaticResource NVMenuItem}">
+                <Setter Property="Header" Value="{Binding ArchiverIdentifier}" />
+                <Setter Property="IsChecked" Value="{Binding IsChecked}" />
+                <Setter Property="Command" Value="{x:Static local:ReloadWithCommand.Command}" />
+                <Setter Property="CommandParameter" Value="{Binding ArchiverIdentifier}" />
+                <Setter Property="InputGestureText" Value="" />
+            </Style>
+
+        </ResourceDictionary>
+
+    </Window.Resources>
+
+    <Window.CommandBindings>
+        <CommandBinding Command="{x:Static SystemCommands.CloseWindowCommand}" Executed="CloseWindowCommand_Execute" />
+        <CommandBinding Command="{x:Static SystemCommands.RestoreWindowCommand}" Executed="RestoreWindowCommand_Execute" />
+        <CommandBinding Command="{x:Static SystemCommands.MaximizeWindowCommand}" Executed="MaximizeWindowCommand_Execute" />
+        <CommandBinding Command="{x:Static SystemCommands.MinimizeWindowCommand}" Executed="MinimizeWindowCommand_Execute" />
+    </Window.CommandBindings>
+
+    <Border>
+
+        <!-- 製品表示領域 -->
+        <Grid x:Name="Root" UseLayoutRounding="True" WindowChrome.IsHitTestVisibleInChrome="False">
+            <Grid x:Name="RootBottom" VerticalAlignment="Bottom" />
+
+            <!-- Main Layer -->
+            <DockPanel>
+
+                <!-- メニューエリア-->
+                <ContentControl x:Name="DockMenuSocket" DockPanel.Dock="Top" Focusable="False" KeyboardNavigation.TabNavigation="Local" KeyboardNavigation.TabIndex="1">
+                    <Border x:Name="MenuArea" BorderBrush="{DynamicResource MenuBar.Border}" BorderThickness="0,0,0,1">
+                        <StackPanel>
+                            <!-- メニューバー-->
+                            <local:MenuBarView x:Name="MenuBar" />
+
+                            <!-- アドレスバー -->
+                            <local:AddressBarView x:Name="AddressBar" VerticalAlignment="Top"
+                                    Visibility="{Binding Source={x:Static local:Config.Current}, Path=MenuBar.IsAddressBarEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                    IsVisibleChanged="AddressBar_IsVisibleChanged"
+                                    IsTabStop="False" />
+
+                        </StackPanel>
+                    </Border>
+                </ContentControl>
+
+                <!-- ステータスエリア -->
+                <Border x:Name="DockStatusArea" DockPanel.Dock="Bottom" KeyboardNavigation.TabNavigation="Local" KeyboardNavigation.TabIndex="3">
+                    <DockPanel>
+
+                        <!-- スライダー -->
+                        <ContentControl x:Name="DockPageSliderSocket" DockPanel.Dock="Bottom" IsTabStop="False">
+                            <Grid x:Name="SliderArea">
+                                <local:PageSliderView x:Name="PageSliderView" VerticalAlignment="Bottom"
+                                        IsVisibleChanged="PageSliderView_IsVisibleChanged"
+                                        KeyboardNavigation.TabNavigation="Local" TabIndex="2">
+                                    <local:PageSliderView.Style>
+                                        <Style TargetType="local:PageSliderView">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding ElementName=FilmStripArea, Path=IsContentVisible}" Value="False">
+                                                    <Setter Property="IsBorderVisible" Value="True" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </local:PageSliderView.Style>
+                                </local:PageSliderView>
+
+                                <local:MediaControlView x:Name="MediaControlView" IsMainViewFocusEnabled="True" VerticalAlignment="Bottom" KeyboardNavigation.TabNavigation="Local" TabIndex="3" />
+                            </Grid>
+                        </ContentControl>
+
+                        <!-- フィルムストリップ -->
+                        <ContentControl x:Name="DockFilmStripSocket" DockPanel.Dock="Bottom" IsTabStop="False">
+                            <local:FilmStripView x:Name="FilmStripArea" IsFocusRequest="{Binding IsFilmStripFocusRequest}"
+                                IsVisibleChanged="FilmStripArea_IsVisibleChanged"
+                                KeyboardNavigation.TabNavigation="Local" TabIndex="1" />
+                        </ContentControl>
+
+                    </DockPanel>
+                </Border>
+
+                <!--  ビューエリア -->
+                <Grid x:Name="ViewArea" KeyboardNavigation.TabNavigation="Local" KeyboardNavigation.TabIndex="2">
+
+                    <!-- ビューエリア ベース -->
+                    <Grid x:Name="ViewAreaBase" />
+
+                    <!-- サイドパネル と メインビュー -->
+                    <Grid x:Name="Panels">
+
+                        <!-- メインビュー パネル領域 -->
+                        <Canvas>
+                            <Grid x:Name="MainViewPanelRect" Canvas.Left="{Binding CanvasLeft, ElementName=SidePanelFrame}" Canvas.Top="{Binding CanvasTop, ElementName=SidePanelFrame}"
+                                    Width="{Binding CanvasWidth}" Height="{Binding CanvasHeight}" UseLayoutRounding="True">
+
+                                <!-- メインビュー パネル -->
+                                <ContentControl x:Name="MainViewSocket" IsTabStop="False" />
+
+                                <!--
+                                <Border BorderBrush="Red" BorderThickness="2"/>
+                                -->
+                            </Grid>
+                        </Canvas>
+
+
+                        <!-- サイドパネル -->
+                        <local:SidePanelFrameView x:Name="SidePanelFrame" PanelMargin="{Binding SidePanelMargin, Mode=OneWay}" Visibility="Visible" Source="{Binding SidePanel}"
+                                IsLeftAutoHide="{Binding Model.CanHideLeftPanel}"
+                                IsRightAutoHide="{Binding Model.CanHideRightPanel}"
+                                CanvasWidth="{Binding CanvasWidth, Mode=OneWayToSource}" CanvasHeight="{Binding CanvasHeight, Mode=OneWayToSource}"
+                                d:IsHidden="True">
+                        </local:SidePanelFrameView>
+
+                    </Grid>
+
+                </Grid>
+
+            </DockPanel>
+
+
+            <!-- Menu Layer -->
+            <ContentControl x:Name="LayerMenuSocket" VerticalAlignment="Top" Visibility="Collapsed" Focusable="False" KeyboardNavigation.TabNavigation="Local" KeyboardNavigation.TabIndex="1">
+                <behaviors:Interaction.Behaviors>
+                    <nwc:AutoHideBehavior Name="MenuBar" Screen="{Binding ElementName=Root}" Dock="Top" IsEnabled="{Binding Model.CanHideMenu}" DelayTime="{Binding AutoHideConfig.AutoHideDelayTime}"
+                            DelayVisibleTime="{Binding AutoHideConfig.AutoHideDelayVisibleTime}" FocusLockMode="{Binding AutoHideConfig.AutoHideFocusLockMode}"
+                            IsVisibleLocked="{Binding Model.IsPanelVisibleLocked}" IsKeyDownDelayEnabled="{Binding AutoHideConfig.IsAutoHideKeyDownDelay}"
+                            HitTestMargin="{Binding AutoHideConfig.AutoHideHitTestVerticalMargin}" Description="{Binding MenuAutoHideDescription}" />
+                </behaviors:Interaction.Behaviors>
+            </ContentControl>
+
+            <!-- Status Layer -->
+            <DockPanel x:Name="LayerStatusArea" VerticalAlignment="Bottom" Visibility="Visible" KeyboardNavigation.TabNavigation="Local" KeyboardNavigation.TabIndex="3">
+                <behaviors:Interaction.Behaviors>
+                    <nwc:AutoHideBehavior Name="StatusAutoHide" Screen="{Binding ElementName=Root}" Dock="Bottom" IsEnabled="{Binding Model.CanHidePageSlider}" DelayTime="{Binding AutoHideConfig.AutoHideDelayTime}"
+                            DelayVisibleTime="{Binding AutoHideConfig.AutoHideDelayVisibleTime}" FocusLockMode="{Binding AutoHideConfig.AutoHideFocusLockMode}"
+                            IsKeyDownDelayEnabled="{Binding AutoHideConfig.IsAutoHideKeyDownDelay}" HitTestMargin="{Binding AutoHideConfig.AutoHideHitTestVerticalMargin}"
+                            Description="{Binding StatusAutoHideDescription}" IsVisibleLocked="{Binding Model.IsPanelVisibleLocked}" />
+                </behaviors:Interaction.Behaviors>
+                <ContentControl x:Name="LayerPageSliderSocket" DockPanel.Dock="Bottom" IsTabStop="False" />
+                <Grid x:Name="LayerStatusAreaPadding" DockPanel.Dock="Bottom" Height="{Binding ElementName=DockPageSliderSocket, Path=ActualHeight}"
+                        Visibility="{Binding ElementName=LayerFilmStripSocket, Path=Visibility}" />
+                <ContentControl x:Name="LayerFilmStripSocket" DockPanel.Dock="Bottom" IsTabStop="False">
+                    <behaviors:Interaction.Behaviors>
+                        <nwc:AutoHideBehavior Name="FilmStripAutoHide" Screen="{Binding ElementName=Root}" Dock="Bottom" IsEnabled="{Binding Model.CanHideFilmStrip}" DelayTime="{Binding AutoHideConfig.AutoHideDelayTime}"
+                                DelayVisibleTime="{Binding AutoHideConfig.AutoHideDelayVisibleTime}" FocusLockMode="{Binding AutoHideConfig.AutoHideFocusLockMode}"
+                                IsKeyDownDelayEnabled="{Binding AutoHideConfig.IsAutoHideKeyDownDelay}" Description="{Binding FilmStripAutoHideDescription}"
+                                IsVisibleLocked="{Binding Model.IsPanelVisibleLocked}">
+                            <nwc:AutoHideBehavior.HitTestMargin>
+                                <MultiBinding Converter="{StaticResource DoubleSumConverter}">
+                                    <Binding ElementName="SliderArea" Path="ActualHeight" />
+                                    <Binding Path="AutoHideConfig.AutoHideHitTestVerticalMargin" />
+                                </MultiBinding>
+                            </nwc:AutoHideBehavior.HitTestMargin>
+                        </nwc:AutoHideBehavior>
+                    </behaviors:Interaction.Behaviors>
+                </ContentControl>
+            </DockPanel>
+
+            <!-- Page title -->
+            <Border x:Name="PageCaption" Grid.Row="1" VerticalAlignment="Bottom" HorizontalAlignment="Center" Background="{DynamicResource Notification.Background}" IsHitTestVisible="False"
+                    CornerRadius="10" Margin="0,0,0,5">
+                <TextBlock VerticalAlignment="Center" HorizontalAlignment="Center" Text="{Binding PageTitle.Title}" FontSize="20.0"
+                        Foreground="{DynamicResource Notification.Foreground}" Margin="20,5" TextWrapping="Wrap" />
+            </Border>
+
+            <!-- Message Layer -->
+            <DockPanel x:Name="MessageLayer" d:IsHidden="True" Visibility="{Binding ElementName=MainViewSocket, Path=Content, Converter={StaticResource MainViewToVisibilityConverter}}">
+                <Grid x:Name="MessageLayerSpace" DockPanel.Dock="Bottom" Height="30" />
+                <local:NormalInfoMessageView Source="{Binding InfoMessage.NormalInfoMessage}" />
+            </DockPanel>
+
+            <!-- Rename manager -->
+            <local:RenameManager x:Name="RenameManager" d:IsHidden="True" />
+
+            <!-- Toast -->
+            <ContentControl Content="{Binding ToastService.ToastCard}" Focusable="False" />
+
+            <!-- Processing Mask -->
+            <local:ProgressBox x:Name="ProgressBox"/>
+            
+            <Grid x:Name="ResizeGrip" Style="{StaticResource ResizeGripStyle}" HorizontalAlignment="Right" VerticalAlignment="Bottom">
+                <Path Fill="Transparent" Data="M20,0V20H0Z"/>
+            </Grid>
+            
+        </Grid>
+
+    </Border>
+</Window>

@@ -1,0 +1,308 @@
+﻿<UserControl x:Class="NeeView.FolderListBox"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:b="http://schemas.microsoft.com/xaml/behaviors"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:NeeView"
+             xmlns:properties="clr-namespace:NeeView.Properties"
+             xmlns:nw="clr-namespace:NeeView.Windows"
+             xmlns:vwp="clr-namespace:WpfToolkit.Controls;assembly=VirtualizingWrapPanel"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance local:FolderListDataContext_Design, IsDesignTimeCreatable=True}"
+             d:DesignHeight="300" d:DesignWidth="300"
+             Foreground="{DynamicResource Panel.Foreground}">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Styles/FolderLineIcons.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+
+            <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+            <local:BooleanToTextWrappingConverter x:Key="BooleanToTextWrappingConverter"/>
+            <local:FolderItemToNoteConverter x:Key="FolderItemToNoteConverter"/>
+            <local:BooleanToVisibilityConverter x:Key="BooleanToVisibilityHiddenConverter" False="Hidden" />
+            <local:BooleanToInverseVisibilityConverter x:Key="BooleanToInverseVisibilityConverter"/>
+            <local:BrushAlphaToVisibilityConverter x:Key="BrushAlphaToVisibilityConverter" />
+            <local:PendingCountToOpacityConverter x:Key="PendingCountToOpacityConverter" />
+            <local:BrushOpacityConverter x:Key="BrushOpacityConverter" />
+
+            <nw:BindingProxy x:Key="PanelBackgroundProxy" Data="{DynamicResource Panel.Background}" />
+
+            <Style x:Key="NameStyleBase" TargetType="TextBlock" >
+                <Setter Property="Text" Value="{Binding DisplayName}"/>
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+
+            <Style  x:Key="NameStyle" TargetType="TextBlock" BasedOn="{StaticResource NameStyleBase}">
+                <Setter Property="Margin" Value="5,0"/>
+            </Style>
+
+            <Style x:Key="NormalNameStyle" TargetType="TextBlock"  BasedOn="{StaticResource NameStyle}">
+                <Setter Property="Margin" Value="5,0"/>
+            </Style>
+
+            <Style x:Key="ContentNameStyle" TargetType="TextBlock"  BasedOn="{StaticResource NameStyle}">
+                <Setter Property="TextWrapping" Value="{Binding Source={x:Static local:Config.Current}, Path=Panels.ContentItemProfile.IsTextWrapped, Converter={StaticResource BooleanToTextWrappingConverter}}"/>
+                <Setter Property="Height" Value="{Binding Source={x:Static local:Config.Current}, Path=Panels.ContentItemProfile.LayoutedTextHeight}"/>
+            </Style>
+
+            <Style x:Key="BannerNameStyle" TargetType="TextBlock"  BasedOn="{StaticResource NameStyle}">
+                <Setter Property="TextWrapping" Value="{Binding Source={x:Static local:Config.Current}, Path=Panels.BannerItemProfile.IsTextWrapped, Converter={StaticResource BooleanToTextWrappingConverter}}"/>
+                <Setter Property="Height" Value="{Binding Source={x:Static local:Config.Current}, Path=Panels.BannerItemProfile.LayoutedTextHeight}"/>
+            </Style>
+
+            <Style x:Key="ThumbnailNameStyle" TargetType="TextBlock"  BasedOn="{StaticResource NameStyleBase}">
+                <Setter Property="TextWrapping" Value="{Binding Source={x:Static local:Config.Current}, Path=Panels.ThumbnailItemProfile.IsTextWrapped, Converter={StaticResource BooleanToTextWrappingConverter}}"/>
+                <Setter Property="Height" Value="{Binding Source={x:Static local:Config.Current}, Path=Panels.ThumbnailItemProfile.TextHeight}"/>
+                <Setter Property="Visibility" Value="{Binding Source={x:Static local:Config.Current}, Path=Panels.ThumbnailItemProfile.IsTextVisible, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                <Setter Property="HorizontalAlignment" Value="Center"/>
+            </Style>
+
+            <Style x:Key="NoteTextStyle" TargetType="TextBlock">
+                <Setter Property="Margin" Value="5,0"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                <Setter Property="Foreground" Value="{DynamicResource Panel.Note}"/>
+                <Setter Property="Visibility" Value="{Binding Foreground, RelativeSource={RelativeSource Mode=Self}, Converter={StaticResource BrushAlphaToVisibilityConverter}}" />
+            </Style>
+
+            <Style x:Key="VerticalSelectedStyle" TargetType="Rectangle">
+                <Setter Property="Width" Value="4" />
+                <Setter Property="Margin" Value="0,0,0,0" />
+                <Setter Property="Fill" Value="{DynamicResource SelectedMark.Foreground}" />
+                <Setter Property="Visibility" Value="{Binding IsVisible, Converter={StaticResource BooleanToVisibilityHiddenConverter}}" />
+            </Style>
+
+            <Style x:Key="HorizontalSelectedStyle" TargetType="Rectangle">
+                <Setter Property="Height" Value="4" />
+                <Setter Property="Margin" Value="0,0,0,0" />
+                <Setter Property="Fill" Value="{DynamicResource SelectedMark.Foreground}" />
+                <Setter Property="Visibility" Value="{Binding IsVisible, Converter={StaticResource BooleanToVisibilityHiddenConverter}}" />
+            </Style>
+
+            <Style x:Key="DetailToolTipDockPanel" TargetType="{x:Type DockPanel}">
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding ElementName=Root, Path=DataContext.DetailToolTip.IsEnabled}" Value="True">
+                        <Setter Property="ToolTip" Value="{Binding Detail}"/>
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+
+            <Style x:Key="DetailToolTipBasePanel" TargetType="{x:Type Panel}">
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding ElementName=Root, Path=DataContext.DetailToolTip.IsPanelEnabled}" Value="True">
+                        <Setter Property="ToolTip" Value="{Binding Detail}"/>
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+
+            <Style x:Key="TagsControlStyle" TargetType="{x:Type local:TagItemsControl}">
+                <Setter Property="ItemsSource" Value="{Binding Tags}" />
+                <Setter Property="Visibility" Value="{Binding ElementName=Root, Path=DataContext.PanelListItemProfile.IsTagVisible, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                <Setter Property="ItemTemplate" Value="{StaticResource TagTemplate}" />
+            </Style>
+
+            <Style x:Key="ContentIsolatedTagsControlStyle" TargetType="{x:Type local:TagItemsControl}" BasedOn="{StaticResource TagsControlStyle}">
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding Source={x:Static local:Config.Current}, Path=Panels.ContentItemProfile.IsTextWrapped}" Value="True">
+                        <Setter Property="Visibility" Value="Collapsed"/>
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+
+            <Style x:Key="ContentConnectedTagsControlStyle" TargetType="{x:Type local:TagItemsControl}" BasedOn="{StaticResource TagsControlStyle}">
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding Source={x:Static local:Config.Current}, Path=Panels.ContentItemProfile.IsTextWrapped}" Value="False">
+                        <Setter Property="Visibility" Value="Collapsed"/>
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+
+            <Style x:Key="ThumbnailIconOverlayBorderStyle" TargetType="{x:Type Border}">
+                <Setter Property="Visibility" Value="{Binding Source={x:Static local:Config.Current}, Path=Panels.ThumbnailItemProfile.IsIconOverlay, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                <Setter Property="Background" Value="{Binding Source={StaticResource PanelBackgroundProxy}, Path=Data, Converter={StaticResource BrushOpacityConverter}, ConverterParameter=0.5}"/>
+            </Style>
+
+            <Style x:Key="ThumbnailIconDockPanelStyle" TargetType="{x:Type DockPanel}">
+                <Setter Property="Visibility" Value="{Binding Source={x:Static local:Config.Current}, Path=Panels.ThumbnailItemProfile.IsIconOverlay, Converter={StaticResource BooleanToInverseVisibilityConverter}}" />
+            </Style>
+
+            <DataTemplate x:Key="NormalTemplate">
+                <DockPanel Style="{StaticResource DetailToolTipDockPanel}" LastChildFill="True" MinHeight="20">
+                    <Rectangle Style="{StaticResource VerticalSelectedStyle}" />
+                    <local:FolderListIcon DockPanel.Dock="Right" FolderItem="{Binding}" Margin="1" />
+                    <local:FolderMarkIcon DockPanel.Dock="Right" FolderItem="{Binding}" Margin="1,1,0,1"/>
+                    <TextBlock x:Name="FileNameTextBlock" Style="{StaticResource NormalNameStyle}" Margin="5,1" Opacity="{Binding PendingCount, Converter={StaticResource PendingCountToOpacityConverter}}" />
+                    <local:TagItemsControl Style="{StaticResource TagsControlStyle}" HorizontalAlignment="Right" />
+                </DockPanel>
+            </DataTemplate>
+
+            <DataTemplate x:Key="ContentTemplate">
+                <DockPanel>
+                    <Rectangle Style="{StaticResource VerticalSelectedStyle}" />
+                    <DockPanel LastChildFill="True" Margin="2">
+                        <local:PanelListContentImage Thumbnail="{Binding Thumbnail}" Opacity="{Binding PendingCount, Converter={StaticResource PendingCountToOpacityConverter}}" />
+                        <DockPanel Style="{StaticResource DetailToolTipDockPanel}">
+                            <local:FolderListIcon DockPanel.Dock="Right" FolderItem="{Binding}" />
+                            <local:FolderMarkIcon DockPanel.Dock="Right" FolderItem="{Binding}" />
+                            <StackPanel VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Style="{StaticResource NoteTextStyle}">
+                                        <TextBlock.Text>
+                                            <MultiBinding Converter="{StaticResource FolderItemToNoteConverter}">
+                                                <Binding />
+                                                <Binding Path="DataContext.FolderOrder" RelativeSource="{RelativeSource FindAncestor, AncestorType=ListBox}" />
+                                            </MultiBinding>
+                                        </TextBlock.Text>
+                                    </TextBlock>
+                                    <local:TagItemsControl Style="{StaticResource ContentConnectedTagsControlStyle}" />
+                                </StackPanel>
+                                <local:TagItemsControl Style="{StaticResource ContentIsolatedTagsControlStyle}" />
+                                <TextBlock x:Name="FileNameTextBlock" Style="{StaticResource ContentNameStyle}" />
+                            </StackPanel>
+                        </DockPanel>
+                    </DockPanel>
+                </DockPanel>
+            </DataTemplate>
+
+            <DataTemplate x:Key="BannerTemplate">
+                <DockPanel>
+                    <Rectangle Style="{StaticResource VerticalSelectedStyle}" />
+                    <DockPanel Margin="0,0" HorizontalAlignment="Stretch" LastChildFill="False">
+                        <DockPanel DockPanel.Dock="Bottom" Style="{StaticResource DetailToolTipDockPanel}" Margin="2">
+                            <local:FolderListIcon DockPanel.Dock="Right" FolderItem="{Binding}" />
+                            <local:FolderMarkIcon DockPanel.Dock="Right" FolderItem="{Binding}" />
+                            <TextBlock x:Name="FileNameTextBlock" Style="{StaticResource BannerNameStyle}" Margin="0" />
+                        </DockPanel>
+                        <Grid>
+                            <local:PanelListBannerImage Thumbnail="{Binding Thumbnail}" HorizontalAlignment="Left" Opacity="{Binding PendingCount, Converter={StaticResource PendingCountToOpacityConverter}}" />
+                            <local:TagItemsControl Style="{StaticResource TagsControlStyle}" VerticalAlignment="Bottom" Margin="0,2" Opacity="0.8"/>
+                        </Grid>
+                    </DockPanel>
+                </DockPanel>
+            </DataTemplate>
+
+            <DataTemplate x:Key="ThumbnailTemplate">
+                <StackPanel Style="{StaticResource DetailToolTipBasePanel}" Margin="5" Width="{Binding Source={x:Static local:Config.Current}, Path=Panels.ThumbnailItemProfile.ShapeWidth}">
+                    <Grid MaxHeight="{Binding Source={x:Static local:Config.Current}, Path=Panels.ThumbnailItemProfile.ShapeHeight, Mode=OneTime}">
+                        <local:PanelListThumbnailImage Thumbnail="{Binding Thumbnail}" Opacity="{Binding PendingCount, Converter={StaticResource PendingCountToOpacityConverter}}" />
+                        <Border Style="{StaticResource ThumbnailIconOverlayBorderStyle}" VerticalAlignment="Bottom" HorizontalAlignment="Right" CornerRadius="3,0,0,0" >
+                            <local:FolderListIcon Margin="0,2,0,0" FolderItem="{Binding}" />
+                        </Border>
+                        <Border Style="{StaticResource ThumbnailIconOverlayBorderStyle}" VerticalAlignment="Top" HorizontalAlignment="Right" CornerRadius="0,0,0,3">
+                            <local:FolderMarkIcon FolderItem="{Binding}" />
+                        </Border>
+                        <local:TagItemsControl Style="{StaticResource TagsControlStyle}" VerticalAlignment="Bottom" Margin="0,2" Orientation="Vertical" ItemOpacity="0.8" />
+                    </Grid>
+                    <Rectangle DockPanel.Dock="Bottom" Style="{StaticResource HorizontalSelectedStyle}" Margin="-5,0,-5,1" />
+                    <DockPanel Style="{StaticResource DetailToolTipDockPanel}">
+                        <DockPanel DockPanel.Dock="Right" Style="{StaticResource ThumbnailIconDockPanelStyle}">
+                            <local:FolderListIcon DockPanel.Dock="Right" FolderItem="{Binding}" VerticalAlignment="Top"/>
+                            <local:FolderMarkIcon DockPanel.Dock="Right" FolderItem="{Binding}" VerticalAlignment="Top"/>
+                        </DockPanel>
+                        <TextBlock x:Name="FileNameTextBlock" Style="{StaticResource ThumbnailNameStyle}" />
+                    </DockPanel>
+                </StackPanel>
+            </DataTemplate>
+
+            <Style x:Key="ListBoxItemStyle" TargetType="{x:Type ListBoxItem}" BasedOn="{StaticResource NVListBoxItem}">
+                <EventSetter Event="PreviewMouseLeftButtonDown" Handler="FolderListItem_MouseLeftButtonDown" />
+                <EventSetter Event="MouseLeftButtonUp" Handler="FolderListItem_MouseLeftButtonUp" />
+                <EventSetter Event="PreviewMouseDoubleClick" Handler="FolderListItem_MouseDoubleClick" />
+                <EventSetter Event="KeyDown" Handler="FolderListItem_KeyDown" />
+                <EventSetter Event="PreviewMouseDown" Handler="FolderListItem_MouseDown" />
+                <EventSetter Event="PreviewMouseUp" Handler="FolderListItem_MouseUp" />
+                <EventSetter Event="PreviewMouseMove" Handler="FolderListItem_MouseMove" />
+                <EventSetter Event="ContextMenuOpening" Handler="FolderListItem_ContextMenuOpening" />
+                <Setter Property="FocusVisualStyle" Value="{StaticResource NVListItemFocusVisual}" />
+                <Setter Property="HorizontalAlignment" Value="Stretch" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+                <Setter Property="ContextMenu">
+                    <Setter.Value>
+                        <ContextMenu />
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <Style x:Key="ListBoxItemBorderStyle" TargetType="{x:Type ListBoxItem}" BasedOn="{StaticResource ListBoxItemStyle}">
+                <Setter Property="BorderBrush" Value="{DynamicResource Item.Separator}" />
+            </Style>
+
+            <Style x:Key="ListBoxItemThumbnailStyle" TargetType="{x:Type ListBoxItem}" BasedOn="{StaticResource ListBoxItemStyle}">
+                <Setter Property="local:ListBoxItemTools.InnerMargin" Value="0" />
+            </Style>
+
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <Grid x:Name="Root">
+
+        <nw:ListBoxExtended x:Name="ListBox" Focusable="True"
+                MinHeight="0"
+                FontSize="{DynamicResource PanelFontSize}"
+                Background="Transparent"
+                Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                FocusVisualStyle="{StaticResource NVFocusVisual}"
+                ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                ItemsSource="{Binding Model.FolderCollection.Items}"
+                SelectedItem="{Binding Model.SelectedItem}"
+                SelectionChanged="FolderList_SelectionChanged"
+                Loaded="FolderList_Loaded"
+                IsVisibleChanged="FolderList_IsVisibleChanged"
+                PreviewKeyDown="FolderList_PreviewKeyDown"
+                KeyDown="FolderList_KeyDown"
+                IsSimpleTextSearchEnabled="{Binding Source={x:Static local:Config.Current}, Path=Panels.IsTextSearchEnabled}"
+                UseLayoutRounding="True"
+                AllowDrop="True"
+                VirtualizingPanel.IsVirtualizing="True"
+                VirtualizingPanel.ScrollUnit="{StaticResource PanelScrollUnit}"
+                VirtualizingPanel.VirtualizationMode="Recycling">
+
+            <b:Interaction.Behaviors>
+                <nw:ListBoxExtendedDragDropStartBehavior AllowedEffects="Copy, Scroll" AllowRightButtonDrag="True" DragBeginAsync="DragStartBehavior_DragBeginAsync" DragDropHook="{x:Static local:DragDropWatcher.DragDropHook}"/>
+            </b:Interaction.Behaviors>
+
+            <ListBox.Style>
+                <Style TargetType="{x:Type nw:ListBoxExtended}" BasedOn="{StaticResource NVListBox}">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding Model.PanelListItemStyle}" Value="Normal">
+                            <Setter Property="ItemTemplate" Value="{StaticResource NormalTemplate}"/>
+                            <Setter Property="ItemContainerStyle" Value="{StaticResource ListBoxItemStyle}" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding Model.PanelListItemStyle}" Value="Content">
+                            <Setter Property="ItemTemplate" Value="{StaticResource ContentTemplate}"/>
+                            <Setter Property="ItemContainerStyle" Value="{StaticResource ListBoxItemBorderStyle}" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding Model.PanelListItemStyle}" Value="Banner">
+                            <Setter Property="ItemTemplate" Value="{StaticResource BannerTemplate}"/>
+                            <Setter Property="ItemContainerStyle" Value="{StaticResource ListBoxItemBorderStyle}" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding Model.PanelListItemStyle}" Value="Thumbnail">
+                            <Setter Property="ItemTemplate" Value="{StaticResource ThumbnailTemplate}"/>
+                            <Setter Property="ItemContainerStyle" Value="{StaticResource ListBoxItemThumbnailStyle}" />
+                            <Setter Property="FixHomeAndEndKeyBehavior" Value="True"/>
+                            <Setter Property="IsNavigateWithWrapEnabled" Value="True"/>
+                            <Setter Property="MouseWheelSpeedRate" Value="{Binding Source={x:Static local:Config.Current}, Path=Panels.MouseWheelSpeedRate}"/>
+                            <Setter Property="ItemsPanel">
+                                <Setter.Value>
+                                    <ItemsPanelTemplate>
+                                        <vwp:VirtualizingWrapPanel IsItemsHost="True" ItemSize="{Binding ThumbnailItemSize}"/>
+                                    </ItemsPanelTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </ListBox.Style>
+        </nw:ListBoxExtended>
+
+        <local:BusyFadeView x:Name="BusyFade" Target="{Binding ElementName=ListBox}" Opacity="0"/>
+    </Grid>
+
+</UserControl>

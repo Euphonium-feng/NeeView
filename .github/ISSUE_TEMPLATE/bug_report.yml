@@ -1,0 +1,49 @@
+name: Bug Report
+description: Report a problem with NeeView
+labels: [bug]
+
+body:
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: >
+        NeeView version.
+      placeholder: "e.g., 43.1"
+
+  - type: dropdown
+    id: package
+    attributes:
+      label: Package Type
+      description: >
+        Type of package in which the problem was identified.
+      options:
+        - ZIP
+        - ZIP-fd
+        - Installer (.msi)
+        - Store App
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Description
+      description: >
+        Please describe the problem in detail. 
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction Steps
+      description: >
+        If you know how to reproduce the problem, please describe it here.
+
+  - type: textarea
+    id: errorlog
+    attributes:
+      label: Error Log
+      description: >
+        If an ErrorLog.txt file exists, paste its contents here.
+      render: text

@@ -1,0 +1,36 @@
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="clr-namespace:NeeView">
+
+    <!-- Material design icons by Google -->
+    <!-- http://www.google.com/design/spec/style/icons.html#icons-system-icons -->
+
+    <DrawingImage x:Key="ic_done_24px">
+        <DrawingImage.Drawing>
+            <GeometryDrawing Brush="{DynamicResource CheckIcon.Foreground}" Pen="{x:Null}" Geometry="{StaticResource g_done_24px}" />
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <DrawingImage x:Key="ic_grade_24px">
+        <DrawingImage.Drawing>
+            <GeometryDrawing Brush="{DynamicResource BookmarkIcon.Foreground}" Pen="{x:Null}" Geometry="{StaticResource g_grade_24px}" />
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <DrawingImage x:Key="ic_grade_24px_t">
+        <DrawingImage.Drawing>
+            <GeometryDrawing Brush="{DynamicResource BookmarkIcon.Foreground}" Pen="{x:Null}" Geometry="{StaticResource g_grade_24px_t}" />
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <DrawingImage x:Key="ic_bookmark_24px">
+        <DrawingImage.Drawing>
+            <GeometryDrawing Brush="{DynamicResource PlaylistItemIcon.Foreground}" Pen="{x:Null}" Geometry="{StaticResource g_bookmark_24px}" />
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <DrawingImage x:Key="ic_bookmark_24px_t">
+        <DrawingImage.Drawing>
+            <GeometryDrawing Brush="{DynamicResource PlaylistItemIcon.Foreground}" Pen="{x:Null}" Geometry="{StaticResource g_bookmark_24px_t}" />
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+</ResourceDictionary>

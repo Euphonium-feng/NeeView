@@ -1,0 +1,153 @@
+﻿using CommunityToolkit.Mvvm.ComponentModel;
+using Generator.Equals;
+using Microsoft.Win32;
+using NeeView.Windows.Property;
+using System.Text.Json.Serialization;
+
+namespace NeeView
+{
+    [Equatable(Explicit = true, IgnoreInheritedMembers = true)]
+    public partial class MediaArchiveConfig : ObservableObject, IMediaContext
+    {
+        public static FileTypeCollection DefaultSupportFileTypes { get; } = new FileTypeCollection(".asf;.avi;.mp4;.mkv;.mov;.wmv");
+
+
+        [DefaultEquality] private bool _isEnabled = true;
+        [DefaultEquality] private bool _isMediaPageEnabled = false;
+        [DefaultEquality] private FileTypeCollection _supportFileTypes = (FileTypeCollection)DefaultSupportFileTypes.Clone();
+        [DefaultEquality] private double _pageSeconds = 10.0;
+        [DefaultEquality] private double _mediaStartDelaySeconds = 0.5;
+        [DefaultEquality] private bool _isMuted;
+        [DefaultEquality] private double _volume = 0.5;
+        [DefaultEquality] private bool _isRepeat;
+        [DefaultEquality] private bool _isLibVlcEnabled;
+        [DefaultEquality] private DefaultSubtitle _defaultSubtitle = DefaultSubtitle.Default;
+        [DefaultEquality] private string? _libVlcPath;
+
+
+        /// <summary>
+        /// 動画をブックとする
+        /// </summary>
+        [PropertyMember]
+        public bool IsEnabled
+        {
+            get { return _isEnabled; }
+            set { SetProperty(ref _isEnabled, value); }
+        }
+
+        /// <summary>
+        /// 動画をページとする
+        /// </summary>
+        [PropertyMember]
+        public bool IsMediaPageEnabled
+        {
+            get { return _isMediaPageEnabled; }
+            set { SetProperty(ref _isMediaPageEnabled, value); }
+        }
+
+        [PropertyMember]
+        public FileTypeCollection SupportFileTypes
+        {
+            get { return _supportFileTypes; }
+            set { SetProperty(ref _supportFileTypes, value); }
+        }
+
+        [PropertyMember]
+        public double PageSeconds
+        {
+            get { return _pageSeconds; }
+            set { SetProperty(ref _pageSeconds, AppMath.Round(value)); }
+        }
+
+        [PropertyMember]
+        public double MediaStartDelaySeconds
+        {
+            get { return _mediaStartDelaySeconds; }
+            set { SetProperty(ref _mediaStartDelaySeconds, AppMath.Round(value)); }
+        }
+
+        [PropertyMember]
+        public bool IsMuted
+        {
+            get { return _isMuted; }
+            set { SetProperty(ref _isMuted, value); }
+        }
+
+        [PropertyMember]
+        public double Volume
+        {
+            get { return _volume; }
+            set { SetProperty(ref _volume, AppMath.Round(value)); }
+        }
+
+        [PropertyMember]
+        public bool IsRepeat
+        {
+            get { return _isRepeat; }
+            set { SetProperty(ref _isRepeat, value); }
+        }
+
+        [PropertyMember]
+        public bool IsLibVlcEnabled
+        {
+            get { return _isLibVlcEnabled; }
+            set { SetProperty(ref _isLibVlcEnabled, value); }
+        }
+
+        [JsonIgnore]
+        [PropertyPath(FileDialogType = Windows.Controls.FileDialogType.Directory)]
+        public string LibVlcPath
+        {
+            get { return _libVlcPath ?? LibVlcProfile.DefaultLibVlcPath; }
+            set { SetProperty(ref _libVlcPath, (string.IsNullOrWhiteSpace(value) || value.Trim() == LibVlcProfile.DefaultLibVlcPath) ? null : value.Trim()); }
+        }
+
+        [JsonPropertyName(nameof(LibVlcPath))]
+        [PropertyMapIgnore]
+        public string? LibVlcPathRaw
+        {
+            get { return _libVlcPath; }
+            set { _libVlcPath = value; }
+        }
+
+        [PropertyMember]
+        public DefaultSubtitle DefaultSubtitle
+        {
+            get { return _defaultSubtitle; }
+            set { SetProperty(ref _defaultSubtitle, value); }
+        }
+    }
+
+
+    /// <summary>
+    /// 既定の字幕
+    /// </summary>
+    public enum DefaultSubtitle
+    {
+        // 既定の字幕を使用する
+        Default,
+
+        // 字幕を無効にする
+        Disable,
+    }
+
+
+    public static class LibVlcProfile
+    {
+        static LibVlcProfile()
+        {
+            try
+            {
+                // get VLC media player install folder
+                var key = Registry.LocalMachine.OpenSubKey("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\VLC media player");
+                var installLocation = (string?)key?.GetValue("InstallLocation");
+                DefaultLibVlcPath = installLocation ?? "";
+            }
+            catch
+            {
+            }
+        }
+
+        public static string DefaultLibVlcPath { get; private set; } = "";
+    }
+}

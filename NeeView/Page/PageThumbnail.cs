@@ -1,0 +1,64 @@
+﻿using System.Threading;
+using System.Threading.Tasks;
+
+namespace NeeView
+{
+    public class PageThumbnail
+    {
+        private readonly PageContent _content;
+
+        public PageThumbnail(PageContent content)
+        {
+            _content = content;
+            Thumbnail = new Thumbnail(_content.ArchiveEntry);
+        }
+
+        public Thumbnail Thumbnail { get; }
+
+        /// <summary>
+        /// キャッシュを無効化
+        /// </summary>
+        public void ClearCache()
+        {
+            Thumbnail.Clear();
+            Thumbnail.IsCacheReadEnabled = false;
+        }
+
+        public async Task LoadAsync(CancellationToken token)
+        {
+            //Debug.WriteLine($"LoadThumbnail({Thumbnail.SerialNumber}): {_content.ArchiveEntry}");
+            NVDebug.AssertMTA();
+
+            if (Thumbnail.IsValid)
+            {
+                return;
+            }
+
+            // NOTE: 解決処理はキャンセル無効
+            if (await _content.ResolveArchiveEntryAsync(CancellationToken.None))
+            {
+                Thumbnail.SetHeader(_content.ArchiveEntry);
+            }
+
+            token.ThrowIfCancellationRequested();
+
+            await Thumbnail.InitializeFromCacheAsync(token);
+            if (Thumbnail.IsValid)
+            {
+                return;
+            }
+
+            var source = await LoadThumbnailAsync(token);
+            Thumbnail.Initialize(source);
+        }
+
+        public virtual Task<ThumbnailSource> LoadThumbnailAsync(CancellationToken token)
+        {
+            // ダミーサムネイル
+            return Task.FromResult(new ThumbnailSource(null));
+        }
+    }
+
+
+
+}

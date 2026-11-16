@@ -1,0 +1,65 @@
+﻿using CommunityToolkit.Mvvm.ComponentModel;
+using System;
+using System.ComponentModel;
+
+namespace NeeView
+{
+    public class FilmStripItemDetailToolTip : ObservableObject, IToolTipService, IDisposable
+    {
+        static FilmStripItemDetailToolTip() => Current = new();
+        public static FilmStripItemDetailToolTip Current { get; }
+
+        private readonly FilmStripConfig _filmstrip;
+        private bool _isToolTipEnabled = true;
+        private bool _disposedValue;
+
+        public FilmStripItemDetailToolTip()
+        {
+            _filmstrip = Config.Current.FilmStrip;
+            _filmstrip.PropertyChanged += Filmstrip_PropertyChanged;
+        }
+
+        public bool IsEnabled
+        {
+            get { return _filmstrip.IsDetailPopupEnabled && _isToolTipEnabled; }
+        }
+
+        // for Rename
+        bool IToolTipService.IsToolTipEnabled
+        {
+            get { return _isToolTipEnabled; }
+            set
+            {
+                if (SetProperty(ref _isToolTipEnabled, value))
+                {
+                    OnPropertyChanged(nameof(IsEnabled));
+                }
+            }
+        }
+        private void Filmstrip_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (string.IsNullOrEmpty(e.PropertyName) || e.PropertyName == nameof(FilmStripConfig.IsDetailPopupEnabled))
+            {
+                OnPropertyChanged(nameof(IsEnabled));
+            }
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!_disposedValue)
+            {
+                if (disposing)
+                {
+                    _filmstrip.PropertyChanged -= Filmstrip_PropertyChanged;
+                }
+                _disposedValue = true;
+            }
+        }
+
+        public void Dispose()
+        {
+            Dispose(disposing: true);
+            GC.SuppressFinalize(this);
+        }
+    }
+}

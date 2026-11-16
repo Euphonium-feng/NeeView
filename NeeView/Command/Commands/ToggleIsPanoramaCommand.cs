@@ -1,0 +1,30 @@
+﻿using NeeView.Properties;
+using System.Windows.Data;
+
+namespace NeeView
+{
+    public class ToggleIsPanoramaCommand : CommandElement
+    {
+        public ToggleIsPanoramaCommand()
+        {
+            this.Group = TextResources.GetString("CommandGroup.PageSetting");
+            this.IsShowMessage = true;
+        }
+
+        public override BindingBase CreateIsCheckedBinding()
+        {
+            return new Binding(nameof(BookConfig.IsPanorama)) { Source = Config.Current.Book };
+        }
+
+        public override string ExecuteMessage(object? sender, CommandContext e)
+        {
+            var state = CommandElementTools.GetState(e, Config.Current.Book.IsPanorama);
+            return GetStateExecuteMessage(state);
+        }
+
+        public override void Execute(object? sender, CommandContext e)
+        {
+            Config.Current.Book.IsPanorama = !Config.Current.Book.IsPanorama;
+        }
+    }
+}

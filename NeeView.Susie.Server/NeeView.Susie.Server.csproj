@@ -1,0 +1,28 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="..\NeeView.props" />
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Platforms>x86</Platforms>
+    <Platform>x86</Platform>
+    <PlatformTarget>x86</PlatformTarget>
+    <Nullable>enable</Nullable>
+    <ApplicationIcon>App.ico</ApplicationIcon>
+    <CETCompat>false</CETCompat>
+    <PublishAot>true</PublishAot>
+    <IsTrimmable>true</IsTrimmable>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <Product>NeeView SusiePlugin Server</Product>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\NeeLaboratory.Remote\NeeLaboratory.Remote.csproj" />
+    <ProjectReference Include="..\NeeView.Susie\NeeView.Susie.csproj" />
+  </ItemGroup>
+
+</Project>
+

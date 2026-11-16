@@ -1,0 +1,45 @@
+﻿<UserControl x:Class="NeeView.Setting.BackgroundSettingControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:NeeView.Setting"
+             xmlns:osc="clr-namespace:OpenSourceControls"
+             xmlns:nwc="clr-namespace:NeeView.Windows.Controls"
+             xmlns:nv="clr-namespace:NeeView"
+             xmlns:properties="clr-namespace:NeeView.Properties"
+             mc:Ignorable="d" 
+             d:DesignHeight="300" d:DesignWidth="300">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+
+            <nv:EnumToBooleanConverter x:Key="EnumToBooleanConverter"/>
+
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <Border BorderBrush="{DynamicResource Control.Border}" BorderThickness="1">
+
+        <!-- Parameters -->
+        <StackPanel Margin="10" >
+
+            <ComboBox ItemsSource="{Binding BrushTypeList}" DisplayMemberPath="Value" SelectedValuePath="Key" SelectedValue="{Binding Type}" Margin="5"/>
+
+            <StackPanel Margin="0,5,0,0">
+
+                <DockPanel Margin="5" KeyboardNavigation.TabNavigation="Local">
+                    <TextBlock Text="{properties:TextBinding CustomBackgroundControl.Color}" MinWidth="50" VerticalAlignment="Center"/>
+                    <nwc:ColorPicker Color="{Binding Color}" ColorMode="{Binding Source={x:Static nv:Config.Current}, Path=System.ColorMode}" />
+                </DockPanel>
+                <DockPanel Margin="5">
+                    <TextBlock Text="{properties:TextBinding CustomBackgroundControl.Image}" MinWidth="50" VerticalAlignment="Center"/>
+                    <nwc:FileNameBox FileDialogType="OpenFile" Title="{properties:TextBinding CustomBackgroundControl.ImageSelect}" Filter="All|*.*" MinHeight="24"
+                            Note="{properties:TextBinding CustomBackgroundControl.ImageSelect.Remarks}"
+                                 Text="{Binding ImageFileName, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}"/>
+                </DockPanel>
+            </StackPanel>
+        </StackPanel>
+
+    </Border>
+</UserControl>

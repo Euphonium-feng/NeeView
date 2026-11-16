@@ -1,0 +1,19 @@
+﻿// @name Switching page end behavior
+// @description Switch the behavior when trying to move beyond the end of the page.
+
+switch (nv.Config.Book.PageEndAction) {
+    case "None":
+        nv.Config.Book.PageEndAction = "Loop"
+        break
+    case "Loop":
+        nv.Config.Book.PageEndAction = "NextBook"
+        break
+    case "NextBook":
+        nv.Config.Book.PageEndAction = "Dialog"
+        break
+    default:
+        nv.Config.Book.PageEndAction = "None"
+}
+
+nv.ShowMessage("PageEnd: " + nv.Config.Book.PageEndAction)
+

@@ -1,0 +1,374 @@
+﻿//#define LOCAL_DEBUG
+
+using NeeLaboratory.Generators;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using static NeeView.FolderConfigCollection;
+
+namespace NeeView
+{
+    [LocalDebug]
+    public partial class FolderConfigCollection
+    {
+        static FolderConfigCollection() => Current = new FolderConfigCollection();
+        public static FolderConfigCollection Current { get; }
+
+
+        [Subscribable]
+        public event EventHandler<FolderConfigChangedEventArgs>? FolderChanged;
+
+
+        public Dictionary<string, FolderConfig> Folders { get; set; } = new();
+
+
+        public void SetFolderConfig(FolderConfig folder)
+        {
+            var action = Folders.ContainsKey(folder.Place) ? FolderConfigChangedAction.Replace : FolderConfigChangedAction.Add;
+            Folders[folder.Place] = folder;
+            FolderChanged?.Invoke(this, new FolderConfigChangedEventArgs(action, folder));
+        }
+
+        public FolderConfig? GetFolderConfig(string place)
+        {
+            return Folders.TryGetValue(place, out var config) ? config : null;
+        }
+
+        public FolderConfig EnsureFolderConfig(string place)
+        {
+            if (!Folders.TryGetValue(place, out var folder))
+            {
+                folder = new FolderConfig(place);
+                SetFolderConfig(folder);
+            }
+            return folder;
+        }
+
+        /// <summary>
+        /// サムネイル設定
+        /// </summary>
+        /// <param name="place"></param>
+        /// <param name="name"></param>
+        /// <param name="target"></param>
+        public void SetThumbnail(string place, string name, string? target)
+        {
+            var folder = EnsureFolderConfig(place);
+            folder.SetThumbnail(name, target);
+            FolderChanged?.Invoke(this, new FolderConfigChangedEventArgs(FolderConfigChangedAction.Replace, folder) { ThumbsChanged = true });
+        }
+
+        /// <summary>
+        /// フォルダー設定初期化
+        /// </summary>
+        public void ClearAllFolderParameter()
+        {
+            foreach (var folder in Folders.Values)
+            {
+                folder.Parameter = null;
+            }
+            FolderChanged?.Invoke(this, new FolderConfigChangedEventArgs(FolderConfigChangedAction.Reset, null));
+        }
+
+        /// <summary>
+        /// フォルダー設定
+        /// </summary>
+        /// <param name="place"></param>
+        /// <param name="parameter"></param>
+        public void SetFolderParameter(string place, FolderParameterMemento parameter)
+        {
+            Debug.Assert(parameter.GetType() == typeof(FolderParameterMemento));
+
+            place = place ?? "<<root>>";
+            var normalizedParameter = parameter.Normalize(place).SetNullIfDefault();
+
+            if (Folders.TryGetValue(place, out var folder))
+            {
+                Debug.Assert(folder.Parameter is null || folder.Parameter.GetType() == typeof(FolderParameterMemento));
+                if (folder.Parameter == normalizedParameter) return;
+                folder.Parameter = normalizedParameter;
+                FolderChanged?.Invoke(this, new FolderConfigChangedEventArgs(FolderConfigChangedAction.Replace, folder));
+            }
+            else
+            {
+                folder = new FolderConfig(place) { Parameter = normalizedParameter };
+                Folders[folder.Place] = folder;
+                FolderChanged?.Invoke(this, new FolderConfigChangedEventArgs(FolderConfigChangedAction.Add, folder));
+            }
+        }
+
+        /// <summary>
+        /// フォルダー設定取得
+        /// </summary>
+        /// <param name="place"></param>
+        /// <returns></returns>
+        public FolderParameterMemento GetFolderParameter(QueryPath query)
+        {
+            var place = query.SimplePath ?? "<<root>>";
+
+            var config = GetFolderConfig(place);
+
+            if (config is null && query.Scheme == QueryScheme.File && FileIO.DirectoryExists(place))
+            {
+                // ファイルの古いパスを取得し、そのフォルダー設定取得を試みる
+                var oldPath = FileResolver.Current.GetOldPath(place, e => Folders.ContainsKey(e));
+                if (oldPath is not null)
+                {
+                    RenameRecursive(oldPath, place);
+                    config = GetFolderConfig(place);
+                }
+            }
+
+            return config?.Parameter ?? new();
+        }
+
+        public bool IsFolderRecursive(QueryPath query)
+        {
+            var parameter = GetFolderParameter(query);
+            return parameter.IsFolderRecursive ?? GetDefaultFolderRecursive(query);
+        }
+
+        public bool GetDefaultFolderRecursive(QueryPath query)
+        {
+            while (true)
+            {
+                query = query.GetParent();
+                if (string.IsNullOrEmpty(query.Path))
+                {
+                    return false;
+                }
+
+                var place = query.SimplePath;
+
+                var config = GetFolderConfig(place);
+                if (config?.Parameter is not null && config.Parameter.IsFolderRecursive.HasValue)
+                {
+                    return config.Parameter.IsFolderRecursive.Value;
+                }
+            }
+        }
+
+        /// <summary>
+        /// 名前変更を反映
+        /// </summary>
+        /// <param name="src"></param>
+        /// <param name="dst"></param>
+        public void RenameRecursive(string src, string dst)
+        {
+            if (src == dst) return;
+
+            var list = Folders.Values.ToList();
+
+            foreach (var folderPair in Folders.ToList())
+            {
+                var folder = folderPair.Value;
+                var isChanged = folder.RenameRecursive(src, dst);
+                if (isChanged)
+                {
+                    if (folderPair.Key != folder.Place)
+                    {
+                        Folders.Remove(folderPair.Key);
+                        FolderChanged?.Invoke(this, new FolderConfigChangedEventArgs(FolderConfigChangedAction.Remove, folder));
+                        Folders[folder.Place] = folder;
+                        FolderChanged?.Invoke(this, new FolderConfigChangedEventArgs(FolderConfigChangedAction.Add, folder));
+                    }
+                    else
+                    {
+                        FolderChanged?.Invoke(this, new FolderConfigChangedEventArgs(FolderConfigChangedAction.Replace, folder));
+                    }
+                }
+            }
+        }
+
+
+        #region Memento
+
+        public class FolderConfigUnit
+        {
+            public string Place { get; set; } = "";
+
+            [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+            public FolderParameterMemento? Parameter { get; set; }
+
+            [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+            public Dictionary<string, string>? Thumbs { get; set; }
+
+            public FolderConfig ToFolderConfig()
+            {
+                var config = new FolderConfig(Place);
+                config.Parameter = Parameter;
+                config.Thumbs = Thumbs;
+                return config;
+            }
+
+            public bool IsDefault()
+            {
+                return (Parameter is null || Parameter == FolderParameterMemento.Default)
+                    && (Thumbs is null || Thumbs.Count == 0);
+            }
+
+            public void Validate()
+            {
+                if (Parameter is not null)
+                {
+                    if (Parameter.FolderOrder == FolderParameter.GetDefaultFolderOrder(Place))
+                    {
+                        Parameter = Parameter with { FolderOrder = null };
+                    }
+                }
+
+                if (Thumbs is not null)
+                {
+                    if (Thumbs.Count == 0)
+                    {
+                        Thumbs = null;
+                    }
+                }
+            }
+
+            public static FolderConfigUnit Create(FolderConfig config)
+            {
+                return new FolderConfigUnit()
+                {
+                    Place = config.Place,
+                    Parameter = Config.Current.History.IsKeepFolderStatus ? CreateFolderParameterMemento(config) : null,
+                    Thumbs = config.Thumbs is not null && config.Thumbs.Count > 0 ? config.Thumbs : null,
+                };
+            }
+
+            private static FolderParameterMemento? CreateFolderParameterMemento(FolderConfig config)
+            {
+                if (config.Parameter is null) return null;
+
+                var parameter = config.Parameter;
+
+                if (FolderParameter.GetDefaultFolderOrder(config.Place) == config.Parameter.FolderOrder)
+                {
+                    parameter = parameter with { FolderOrder = null };
+                }
+
+                return parameter;
+            }
+
+        }
+
+        public FolderConfigCollectionMemento CreateMemento()
+        {
+            var memento = new FolderConfigCollectionMemento();
+
+            memento.Folders = Folders.Values
+                .Select(e => FolderConfigUnit.Create(e))
+                .Where(e => !e.IsDefault())
+                .OrderBy(e => e.Place)
+                .ToList();
+
+            return memento;
+        }
+
+        public void Restore(FolderConfigCollectionMemento? memento)
+        {
+            if (memento == null) return;
+
+            Folders = memento.Folders.ToDictionary(e => e.Place, e => e.ToFolderConfig());
+
+            // 互換用 : FileResolver 登録
+            if (memento.Folders is not null && memento.Format?.CompareTo(new FormatVersion(FolderConfigCollectionMemento.FormatName, VersionNumber.Ver45_Alpha4)) <= 0)
+            {
+                var files = memento.Folders
+                    .Select(e => e.Place)
+                    .Where(e => QuerySchemeExtensions.GetScheme(e) == QueryScheme.File)
+                    .ToList();
+
+                ProcessJobEngine.Current.AddJob("Processing folders",
+                    () =>
+                    {
+                        FileResolver.Current.AddRangeArchivePath(files);
+                    });
+            }
+        }
+
+        public void Restore(Dictionary<string, FolderParameterMemento>? folders)
+        {
+            if (folders is null) return;
+
+            var memento = new FolderConfigCollectionMemento();
+
+            foreach (var folder in folders)
+            {
+                var unit = new FolderConfigUnit()
+                {
+                    Place = folder.Key,
+                    Parameter = folder.Value.Normalize(folder.Key),
+                };
+                memento.Folders.Add(unit);
+            }
+
+            Restore(memento);
+        }
+
+        #endregion
+
+    }
+
+
+    public class FolderConfigCollectionMemento
+    {
+        public static string FormatName { get; } = Environment.SolutionName + ".Folders";
+        public static FormatVersion FormatVersion { get; } = new FormatVersion(FormatName);
+
+        /// <summary>
+        /// フォーマットID
+        /// </summary>
+        public FormatVersion Format { get; set; } = FormatVersion;
+
+        /// <summary>
+        /// フォルダー設定
+        /// </summary>
+        public List<FolderConfigUnit> Folders { get; set; } = new();
+
+
+        public void Save(string path, string? backupFileName)
+        {
+            var json = JsonSerializer.SerializeToUtf8Bytes(this, UserSettingTools.GetSerializeOptions());
+            FileIO.WriteAllBytesDurable(path, json, backupFileName);
+        }
+
+        public static FolderConfigCollectionMemento Load(string path)
+        {
+            using var stream = FileIO.OpenReadShared(path);
+            return Load(stream);
+        }
+
+        public static FolderConfigCollectionMemento Load(Stream stream)
+        {
+            var memento = JsonSerializer.Deserialize<FolderConfigCollectionMemento>(stream, UserSettingTools.GetDeserializeOptions());
+            if (memento is null) throw new FormatException();
+            return memento.Validate();
+        }
+    }
+
+
+    public class FolderConfigChangedEventArgs : EventArgs
+    {
+        public FolderConfigChangedEventArgs(FolderConfigChangedAction action, FolderConfig? folderConfig)
+        {
+            Action = action;
+            FolderConfig = folderConfig;
+        }
+
+        public FolderConfigChangedAction Action { get; }
+        public FolderConfig? FolderConfig { get; }
+        public bool ThumbsChanged { get; init; }
+    }
+
+    public enum FolderConfigChangedAction
+    {
+        Add,
+        Remove,
+        Replace,
+        Reset,
+    }
+}

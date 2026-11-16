@@ -1,0 +1,16 @@
+﻿// @name Aspect ratio switching
+// @description Switch aspect ratio. Display a warning when size specification is not valid.
+
+if (nv.Config.ImageCustomSize.IsEnabled) {
+    const aspects = ["None", "Origin", "Ratio_1_1", "Ratio_2_3", "Ratio_4_3", "Ratio_8_9", "Ratio_16_9", "HalfView", "View"]
+    index = aspects.indexOf(nv.Config.ImageCustomSize.AspectRatio)
+    index = (index + 1) % aspects.length
+    nv.Config.ImageCustomSize.AspectRatio = aspects[index]
+    nv.ShowMessage(aspects[index])
+}
+else {
+    nv.ShowMessage("CustomSize is not active")
+}
+
+
+

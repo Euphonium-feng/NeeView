@@ -1,0 +1,10 @@
+﻿// Sample script to run at startup
+// e.g.) NeeView.exe --script="C:\FooBar\Startup.nvjs"
+
+// Close all side panels to focus on the main view.
+nv.Command.FocusMainView.Patch({NeedClosePanels:true}).Execute()
+
+// Effect settings: Set image size to 512x512
+nv.Config.ImageCustomSize.Size = "512,512"
+nv.Config.ImageCustomSize.IsUniformed = false
+nv.Config.ImageCustomSize.IsEnabled = true

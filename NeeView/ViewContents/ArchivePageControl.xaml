@@ -1,0 +1,88 @@
+﻿<UserControl x:Class="NeeView.ArchivePageControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:properties="clr-namespace:NeeView.Properties"
+             xmlns:local="clr-namespace:NeeView"
+             mc:Ignorable="d"
+             VerticalAlignment="Stretch" HorizontalAlignment="Stretch"
+             d:DesignWidth="480" d:DesignHeight="640">
+
+    <UserControl.Resources>
+        <SolidColorBrush x:Key="DefaultBrush" Color="White" />
+        <SolidColorBrush x:Key="LocalForeground" Color="#F222"/>
+        <local:BooleanToInverseVisibilityConverter x:Key="BooleanToInverseVisibilityConverter" />
+        <local:NullableToVisibilityConverter x:Key="NullableToVisibilityConverter" />
+        <local:NullableToInverseVisibilityConverter x:Key="NullableToInverseVisibilityConverter" />
+
+        <DrawingImage x:Key="fic_folder">
+            <DrawingImage.Drawing>
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="LightGray" Thickness="1"></Pen>
+                    </GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry FillRule="Nonzero" Figures="M0,0 L14,0 14,10 16,12 16,18, 0,18Z M14,10 L13,12 13,18"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingImage.Drawing>
+        </DrawingImage>
+    </UserControl.Resources>
+
+    <Border x:Name="Root" Background="#EEE">
+
+        <Grid x:Name="RootGrid" Margin="10">
+            <Grid.RowDefinitions>
+                <RowDefinition x:Name="ViewArea" Height="3*"/>
+                <RowDefinition x:Name="InfoArea" Height="1*" MinHeight="128" />
+            </Grid.RowDefinitions>
+
+            <Grid x:Name="ViewGrid" Grid.Row="0" Margin="10,30,10,0">
+                <Grid x:Name="OpenBookButton" Grid.Row="0" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="10" Cursor="Hand"
+                        MouseLeftButtonDown="OpenBookButton_MouseLeftButtonDown" MouseLeftButtonUp="OpenBookButton_MouseLeftButtonUp" MouseRightButtonUp="OpenBookButton_MouseRightButtonUp" 
+                        PreviewStylusDown="OpenBookButton_PreviewStylusDown" PreviewStylusUp="OpenBookButton_PreviewStylusUp" MouseEnter="OpenBookButton_MouseEnter" MouseLeave="OpenBookButton_MouseLeave">
+
+                    <Grid x:Name="ImageGrid" HorizontalAlignment="Center" VerticalAlignment="Bottom">
+                        <Grid x:Name="BackPanel" Margin="8,8,0,0" >
+                            <Grid.Style>
+                                <Style TargetType="Grid">
+                                    <Setter Property="Background" Value="{DynamicResource Thumbnail.Background}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding ElementName=OpenBookButton, Path=IsMouseOver}" Value="True">
+                                            <Setter Property="Background" Value="{DynamicResource Item.MouseOver.Border}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Grid.Style>
+                        </Grid>
+                        <Grid x:Name="FrontPanel" Margin="0,0,8,8">
+                            <Grid.Style>
+                                <Style TargetType="Grid">
+                                    <Setter Property="Background" Value="{DynamicResource Thumbnail.Background}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding ElementName=OpenBookButton, Path=IsMouseOver}" Value="True">
+                                            <Setter Property="Background" Value="{DynamicResource Item.MouseOver.Border}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Grid.Style>
+
+                            <Image x:Name="ContentImage" Source="{Binding ImageSource}" Stretch="Uniform" Margin="2" RenderOptions.BitmapScalingMode="Fant" MinWidth="64" MinHeight="64"
+                                   Visibility="{Binding ImageSource, Converter={StaticResource NullableToVisibilityConverter}}"/>
+                            <Viewbox>
+                                <Grid Background="#EEE" Width="256" Height="320" Margin="2" Visibility="{Binding ImageSource, Converter={StaticResource NullableToInverseVisibilityConverter}}">
+                                    <Image Source="{StaticResource fic_folder}" HorizontalAlignment="Center" VerticalAlignment="Center" Width="64" Height="64"/>
+                                </Grid>
+                            </Viewbox>
+                        </Grid>
+                    </Grid>
+                </Grid>
+            </Grid>
+
+            <local:FileCard Grid.Row="1" x:Name="FileCard" Margin="10" VerticalAlignment="Top" />
+
+        </Grid>
+    </Border>
+
+</UserControl>

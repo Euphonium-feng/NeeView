@@ -1,0 +1,54 @@
+// A script with the special name "OnBookLoaded.nvjs" is automatically executed when the book is opened.
+// 
+// @name Book start processing
+// @description Event when opening a book
+
+// Example: If the book path contains “(A)”, set the scroll movement amount for all commands to 20%; otherwise, set it to 60%.
+if (nv.Book.Path.match(/\(A\)/) != null) {
+    nv.Command.ViewScrollUp.Parameter = 0.2
+    nv.Command.ViewScrollNTypeUp.Parameter = 0.2
+    nv.Command.NextScrollPage.Parameter.Scroll = 0.2
+}
+else {
+    nv.Command.ViewScrollUp.Parameter = 0.6
+    nv.Command.ViewScrollNTypeUp.Parameter = 0.6
+    nv.Command.NextScrollPage.Parameter.Scroll = 0.6
+}
+
+
+// Example: If the path of the newly opened book contains “English,” open it from the left; otherwise, open it from the right.
+if (nv.Book.IsNew) {
+    if (nv.Book.Path.match(/English/) != null) {
+        nv.Book.Config.BookReadOrder = "LeftToRight"
+    }
+    else {
+        nv.Book.Config.BookReadOrder = "RightToLeft"
+    }
+}
+
+
+// Example: Changing the operation method for video files
+if (nv.Book.IsMedia) {
+    // Video: Click to play/pause, double-click to switch to full screen
+    nv.Command.ToggleMediaPlay.ShortCutKey = "LeftClick"
+    nv.Command.Script_ToggleFullScreenAndMediaPlay.ShortCutKey = "LeftDoubleClick"
+    nv.Command.NextPage.ShortCutKey = "Left"
+    // Video: Changing the volume with the wheel
+    nv.Command.Script_MediaVolumeUp.ShortCutKey = "WheelUp"
+    nv.Command.Script_MediaVolumeDown.ShortCutKey = "WheelDown"
+    nv.Command.PrevScrollPage.ShortCutKey = null
+    nv.Command.NextScrollPage.ShortCutKey = null
+}
+else {
+    // Normal: Standard settings
+    nv.Command.ToggleMediaPlay.ShortCutKey = null
+    nv.Command.Script_ToggleFullScreenAndMediaPlay.ShortCutKey = null
+    nv.Command.NextPage.ShortCutKey = "Left,LeftClick"
+    nv.Command.Script_MediaVolumeUp.ShortCutKey = null
+    nv.Command.Script_MediaVolumeDown.ShortCutKey = null
+    nv.Command.PrevScrollPage.ShortCutKey = "WheelUp"
+    nv.Command.NextScrollPage.ShortCutKey = "WheelDown"
+}
+
+
+

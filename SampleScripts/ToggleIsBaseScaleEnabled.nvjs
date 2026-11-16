@@ -1,0 +1,6 @@
+﻿// This is an example of scripting commands to change settings.
+//
+// @name Base Scale ON/OFF
+
+nv.Config.View.IsBaseScaleEnabled = !nv.Config.View.IsBaseScaleEnabled
+

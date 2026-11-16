@@ -1,0 +1,549 @@
+﻿//#define LOCAL_DEBUG
+
+using CommunityToolkit.Mvvm.ComponentModel;
+using NeeLaboratory.Generators;
+using NeeLaboratory.Linq;
+using NeeView.Collections.ObjectModel;
+using NeeView.Properties;
+using System;
+using System.Collections.Generic;
+using System.Collections.Specialized;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace NeeView
+{
+    [LocalDebug]
+    public partial class BookHistoryCollection : ObservableObject
+    {
+        static BookHistoryCollection() => Current = new BookHistoryCollection();
+        public static BookHistoryCollection Current { get; }
+
+
+        private readonly Lock _lock = new();
+
+        // 履歴は内部的には日時昇順の ObservableCollection として保持する。
+        // 末端のほうが更新頻度が高いので入れ替えに有利なため。
+        private readonly ObservableCollectionEx<BookHistory> _items;
+        private readonly ObservableCollectionMap<BookHistory> _itemsMap;
+
+        private BookHistoryCollection()
+        {
+            HistoryChanged += BookHistoryCollection_HistoryChanged;
+
+            BookshelfSearchHistory.CollectionChanged += SearchHistoryChanged;
+            BookmarkSearchHistory.CollectionChanged += SearchHistoryChanged;
+            BookHistorySearchHistory.CollectionChanged += SearchHistoryChanged;
+            PageListSearchHistory.CollectionChanged += SearchHistoryChanged;
+
+            _items = new();
+            _itemsMap = new(_items);
+        }
+
+
+        [Subscribable]
+        public event EventHandler<BookMementoCollectionChangedArgs>? HistoryChanged;
+
+        [Subscribable]
+        public event NotifyCollectionChangedEventHandler? SearchChanged;
+
+
+        // 履歴コレクションロック
+        public Lock ItemsLock => _lock;
+
+        // 履歴コレクション
+        public ObservableCollectionEx<BookHistory> Items => _items;
+
+        // 要素数
+        public int Count => _items.Count;
+
+        // 更新番号
+        public int SerialNumber { get; private set; }
+
+        // 本棚 検索履歴
+        public HistoryStringCollection BookshelfSearchHistory { get; } = new();
+
+        // ブックマーク 検索履歴
+        public HistoryStringCollection BookmarkSearchHistory { get; } = new();
+
+        // 履歴 検索履歴
+        public HistoryStringCollection BookHistorySearchHistory { get; } = new();
+
+        // ページリスト 検索履歴
+        public HistoryStringCollection PageListSearchHistory { get; } = new();
+
+
+        private void BookHistoryCollection_HistoryChanged(object? sender, BookMementoCollectionChangedArgs e)
+        {
+            SerialNumber++;
+            OnPropertyChanged(nameof(Count));
+        }
+
+        private void SearchHistoryChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            SearchChanged?.Invoke(sender, e);
+        }
+
+        // 履歴クリア
+        public void Clear()
+        {
+            lock (_lock)
+            {
+                AppDispatcher.Invoke(() => _items.Clear());
+                BookMementoCollection.Current.CleanUp();
+            }
+
+            HistoryChanged?.Invoke(this, new BookMementoCollectionChangedArgs(BookMementoCollectionChangedType.Reset));
+        }
+
+        public void Load(IEnumerable<BookHistoryMemento> items, IEnumerable<BookMemento> books)
+        {
+            lock (_lock)
+            {
+                AppDispatcher.Invoke(() => _items.Clear());
+                BookMementoCollection.Current.CleanUp();
+
+                foreach (var book in books)
+                {
+                    BookMementoCollection.Current.Set(book);
+                }
+
+                try
+                {
+                    // 日時昇順にする。ソート済のはずなので反転のみ行う。
+                    if (items.Any() && items.First().LastAccessTime > items.Last().LastAccessTime)
+                    {
+                        items = items.Reverse();
+                    }
+                    AppDispatcher.Invoke(() => _items.Reset(items.Select(e => new BookHistory(e.Path, e.LastAccessTime))));
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine(ex.Message);
+                }
+            }
+
+            HistoryChanged?.Invoke(this, new BookMementoCollectionChangedArgs(BookMementoCollectionChangedType.Load));
+        }
+
+        public bool Contains(string place)
+        {
+            if (place == null) return false;
+
+            lock (_lock)
+            {
+                return _itemsMap.ContainsKey(place);
+            }
+        }
+
+        public BookMementoUnit? FindUnit(string place)
+        {
+            if (place == null) return null;
+
+            lock (_lock)
+            {
+                return _itemsMap.Find(place)?.Unit;
+            }
+        }
+
+        // 履歴追加
+        public void Add(BookMemento memento, bool isKeepOrder)
+        {
+            if (memento == null) return;
+
+            var changeType = BookMementoCollectionChangedType.None;
+
+            try
+            {
+                BookHistory? item;
+                lock (_lock)
+                {
+                    item = _itemsMap.Find(memento.Path);
+                    if (item != null)
+                    {
+                        item.Unit.Memento = memento;
+                        if (!isKeepOrder)
+                        {
+                            item.LastAccessTime = DateTime.Now;
+                            //HistoryChanged?.Invoke(this, BookMementoCollectionChangedArgs.Create(BookMementoCollectionChangedType.UpdateLastAccessTime, [item]));
+                            MoveCore(_items.Count - 1, item);
+                        }
+                        changeType = BookMementoCollectionChangedType.Replace;
+                    }
+                    else
+                    {
+                        item = new BookHistory(BookMementoCollection.Current.Set(memento), DateTime.Now);
+                        item.Unit.Memento = memento;
+                        item.LastAccessTime = DateTime.Now;
+                        //InsertCore(0, item);
+                        AddCore(item);
+                        changeType = BookMementoCollectionChangedType.Add;
+                    }
+                }
+
+                if (changeType != BookMementoCollectionChangedType.None)
+                {
+                    HistoryChanged?.Invoke(this, BookMementoCollectionChangedArgs.Create(changeType, [item]));
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.WriteLine(e.Message);
+            }
+        }
+
+        // 履歴削除
+        public void Remove(string place)
+        {
+            var item = RemoveCore(place);
+
+            if (item is not null)
+            {
+                HistoryChanged?.Invoke(this, new BookMementoCollectionChangedArgs(BookMementoCollectionChangedType.Remove, null, [item]));
+            }
+        }
+
+        // まとめて履歴削除
+        public void Remove(IEnumerable<string> places)
+        {
+            if (places == null) return;
+
+            var unlinked = RemoveCore(places);
+
+            if (unlinked.Count != 0)
+            {
+                HistoryChanged?.Invoke(this, new BookMementoCollectionChangedArgs(BookMementoCollectionChangedType.Remove, null, unlinked));
+            }
+        }
+
+        // 無効な履歴削除
+        public async Task<int> RemoveUnlinkedAsync(CancellationToken token)
+        {
+            Trace.WriteLine($"BookHistory.RemoveUnlinked...");
+
+            var unlinked = new List<BookHistory>();
+            foreach (var item in this.ToList())
+            {
+                if (!await ArchiveEntryUtility.ExistsAsync(item.Path, false, token))
+                {
+                    unlinked.Add(item);
+                }
+            }
+
+            if (unlinked.Count != 0)
+            {
+                RemoveCore(unlinked.Select(e => e.Path));
+                HistoryChanged?.Invoke(this, new BookMementoCollectionChangedArgs(BookMementoCollectionChangedType.Remove, null, unlinked));
+            }
+
+            Trace.WriteLine($"BookHistory.RemoveUnlinked done.");
+            return unlinked.Count;
+        }
+
+        public void ShowRemovedMessage(int removedCount)
+        {
+            ToastService.Current.Show(new Toast(TextResources.GetFormatString("History.DeleteItemsMessage", removedCount)));
+        }
+
+        public List<BookHistory> ToList()
+        {
+            lock (_lock)
+            {
+                return _items.ToList();
+            }
+        }
+
+        // 最近使った履歴のリストアップ
+        public List<BookHistory> ListUp(int size)
+        {
+            lock (_lock)
+            {
+                return _items.Reverse().Take(size).ToList();
+            }
+        }
+
+        public void Rename(string src, string dst)
+        {
+            BookHistory? node;
+            lock (_lock)
+            {
+                node = _itemsMap.Find(src);
+                if (node != null)
+                {
+                    var dstNode = _itemsMap.Find(dst);
+                    if (dstNode is not null)
+                    {
+                        AppDispatcher.Invoke(() => _items.Remove(dstNode));
+                    }
+                    node.Path = dst;
+                    _itemsMap.Remap(src, node);
+                }
+            }
+
+            if (node is not null)
+            {
+                List<BookHistory> list = [node];
+                HistoryChanged?.Invoke(this, new BookMementoCollectionChangedArgs(BookMementoCollectionChangedType.Replace, list, list));
+            }
+        }
+
+        private void AddCore(BookHistory item)
+        {
+            lock (_lock)
+            {
+                Debug.Assert(!_itemsMap.ContainsKey(item.Key));
+                AppDispatcher.Invoke(() => _items.Add(item));
+            }
+        }
+
+        private void InsertCore(int index, BookHistory item)
+        {
+            lock (_lock)
+            {
+                Debug.Assert(!_itemsMap.ContainsKey(item.Key));
+                AppDispatcher.Invoke(() => _items.Insert(index, item));
+            }
+        }
+
+        private bool MoveCore(int index, BookHistory item)
+        {
+            lock (_lock)
+            {
+                var oldIndex = _items.LastIndexOf(item);
+                if (oldIndex < 0) throw new ArgumentException("Cannot found item.");
+                if (oldIndex == index) return false;
+                AppDispatcher.Invoke(() => _items.Move(oldIndex, index));
+                return true;
+            }
+        }
+
+        private BookHistory? RemoveCore(string place)
+        {
+            lock (_lock)
+            {
+                var item = _itemsMap.Find(place);
+                if (item != null)
+                {
+                    AppDispatcher.Invoke(() => _items.Remove(item));
+                }
+                return item;
+            }
+        }
+
+        private List<BookHistory> RemoveCore(IEnumerable<string> places)
+        {
+            lock (_lock)
+            {
+                var unlinked = places.Select(e => _itemsMap.Find(e)).WhereNotNull().ToList();
+                if (unlinked.Count != 0)
+                {
+                    foreach (var item in unlinked)
+                    {
+                        LocalDebug.WriteLine($"Remove {item.Path}");
+                        AppDispatcher.Invoke(() => _items.Remove(item));
+                    }
+                }
+                return unlinked;
+            }
+        }
+
+
+        #region Memento
+
+        // memento作成
+        public BookHistoryCollectionMemento CreateMemento()
+        {
+            var memento = new BookHistoryCollectionMemento();
+
+            // NOTE: 保存時は日時降順にする
+            var items = Limit(this.Items.Reverse().Where(e => !e.Path.StartsWith(Temporary.Current.TempDirectory, StringComparison.Ordinal)), Config.Current.History.LimitSize, Config.Current.History.LimitSpan);
+
+            memento.Items = items
+                .Select(e => e.CreateMemento())
+                .ToList();
+
+            if (Config.Current.History.IsKeepSearchHistory)
+            {
+                memento.BookshelfSearchHistory = this.BookshelfSearchHistory.Any() ? this.BookshelfSearchHistory.ToList() : null;
+                memento.BookmarkSearchHistory = this.BookmarkSearchHistory.Any() ? this.BookmarkSearchHistory.ToList() : null;
+                memento.BookHistorySearchHistory = this.BookHistorySearchHistory.Any() ? this.BookHistorySearchHistory.ToList() : null;
+                memento.PageListSearchHistory = this.PageListSearchHistory.Any() ? this.PageListSearchHistory.ToList() : null;
+            }
+
+            return memento;
+        }
+
+        // memento適用
+        public RestoreResult Restore(BookHistoryCollectionMemento? memento, bool fromLoad)
+        {
+            if (memento == null)
+            {
+                return RestoreResult.None;
+            }
+
+            RestoreResult result = RestoreResult.None;
+
+#pragma warning disable CS0612 // 型またはメンバーが旧型式です
+            this.BookshelfSearchHistory.Replace(memento.BookshelfSearchHistory ?? memento.SearchHistory);
+#pragma warning restore CS0612 // 型またはメンバーが旧型式です
+            this.BookmarkSearchHistory.Replace(memento.BookmarkSearchHistory);
+            this.BookHistorySearchHistory.Replace(memento.BookHistorySearchHistory);
+            this.PageListSearchHistory.Replace(memento.PageListSearchHistory);
+
+            if (memento.Items != null)
+            {
+                var items = fromLoad
+                    ? Limit(memento.Items, Config.Current.History.LimitSize, Config.Current.History.LimitSpan).ToList()
+                    : memento.Items;
+
+                var books = items.Select(e => BookMemento.ParseWithProperties(e.Path, e.Page, e.Props)).WhereNotNull();
+
+                this.Load(items, books);
+
+                result |= RestoreResult.RestoreHistory;
+            }
+
+            if (memento.FoldersLegacy is not null)
+            {
+                FolderConfigCollection.Current.Restore(memento.FoldersLegacy);
+                result |= RestoreResult.RestoreFolderConfig;
+            }
+
+            return result;
+        }
+
+
+        [Flags]
+        public enum RestoreResult
+        {
+            None,
+            RestoreHistory = 1 << 0,
+            RestoreFolderConfig = 1 << 1,
+        }
+
+        // 履歴数制限
+        public static IEnumerable<T> Limit<T>(IEnumerable<T> source, int limitSize, TimeSpan limitSpan)
+            where T : IBookHistory
+        {
+            // limit size
+            var collection = limitSize == -1 ? source : source.Take(limitSize);
+
+            // limit time
+            var limitTime = DateTime.Now - limitSpan;
+            collection = limitSpan == default ? collection : collection.TakeWhile(e => e.LastAccessTime > limitTime);
+
+            return collection;
+        }
+
+        #endregion
+    }
+
+
+    /// <summary>
+    /// 履歴Memento
+    /// </summary>
+    [Memento]
+    [LocalDebug]
+    public partial class BookHistoryCollectionMemento : ObservableObject
+    {
+        public static string FormatName => Environment.SolutionName + ".History";
+
+        public FormatVersion? Format { get; set; }
+
+        public List<BookHistoryMemento> Items { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<string>? BookshelfSearchHistory { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<string>? BookmarkSearchHistory { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<string>? BookHistorySearchHistory { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<string>? PageListSearchHistory { get; set; }
+
+        #region Obsolete
+
+        [Obsolete, Alternative(nameof(BookshelfSearchHistory), 40)] // v40.0
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWriting)]
+        public List<string>? SearchHistory { get; set; }
+
+        [JsonPropertyName("Folders")] // v45.0
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWriting)]
+        public Dictionary<string, FolderParameterMemento>? FoldersLegacy { get; set; }
+
+        [Obsolete, Alternative(null, 46)] // v46.0
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWriting)]
+        public List<BookMemento>? Books { get; set; }
+
+        #endregion Obsolete
+
+        public BookHistoryCollectionMemento()
+        {
+            Format = new FormatVersion(FormatName);
+            Items = [];
+        }
+
+
+        public void Save(string path, string? backupFileName)
+        {
+            var json = JsonSerializer.SerializeToUtf8Bytes(this, UserSettingTools.GetSerializeOptions());
+            FileIO.WriteAllBytesDurable(path, json, backupFileName);
+        }
+
+        public static BookHistoryCollectionMemento Load(string path)
+        {
+            using var stream = FileIO.OpenReadShared(path);
+            return Load(stream);
+        }
+
+        public static BookHistoryCollectionMemento Load(Stream stream)
+        {
+            var memento = JsonSerializer.Deserialize<BookHistoryCollectionMemento>(stream, UserSettingTools.GetDeserializeOptions());
+            if (memento is null) throw new FormatException();
+            return memento.Validate();
+        }
+
+        // 合成
+        public void Merge(BookHistoryCollectionMemento? memento)
+        {
+            if (memento == null) return;
+
+            LocalDebug.WriteLine("HistoryMerge...");
+
+            bool isDirty = false;
+            var itemMap = Items.ToDictionary(e => e.Path, e => e);
+
+            foreach (var item in memento.Items)
+            {
+                if (itemMap.ContainsKey(item.Path))
+                {
+                    if (itemMap[item.Path].LastAccessTime < item.LastAccessTime)
+                    {
+                        LocalDebug.WriteLine($"HistoryMerge: Update: {item.Path}");
+                        itemMap[item.Path] = item;
+                        isDirty = true;
+                    }
+                }
+                else
+                {
+                    LocalDebug.WriteLine($"HistoryMerge: Add: {item.Path}");
+                    itemMap.Add(item.Path, item);
+                    isDirty = true;
+                }
+            }
+
+            if (isDirty)
+            {
+                Items = BookHistoryCollection.Limit(itemMap.Values.OrderByDescending(e => e.LastAccessTime), Config.Current.History.LimitSize, Config.Current.History.LimitSpan).ToList();
+            }
+        }
+    }
+}

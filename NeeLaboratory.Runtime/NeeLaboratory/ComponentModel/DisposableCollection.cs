@@ -1,0 +1,66 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+
+namespace NeeLaboratory.ComponentModel
+{
+    public class DisposableCollection : List<IDisposable>, IDisposable
+    {
+        private bool _disposedValue;
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!_disposedValue)
+            {
+                if (disposing)
+                {
+                    foreach (var disposable in this.Reverse<IDisposable>())
+                    {
+                        disposable.Dispose();
+                    }
+                }
+
+                _disposedValue = true;
+            }
+        }
+
+        public void Dispose()
+        {
+            Dispose(disposing: true);
+            GC.SuppressFinalize(this);
+        }
+
+
+        public void Add(Action action)
+        {
+            Add(new AnonymousDisposable(action));
+        }
+
+        /// <summary>
+        /// Clear disposable items and initialize this disposed flag.
+        /// </summary>
+        /// <remarks>
+        /// overwrite Clear()
+        /// </remarks>
+        public new void Clear()
+        {
+            base.Clear();
+            _disposedValue = false;
+        }
+
+
+#if false
+        public static DisposableCollection operator +(DisposableCollection a, IDisposable b)
+        {
+            a.Add(b);
+            return a;
+        }
+
+        public static DisposableCollection operator -(DisposableCollection a, IDisposable b)
+        {
+            a.Remove(b);
+            return a;
+        }
+#endif
+    }
+}

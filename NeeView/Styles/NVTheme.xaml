@@ -1,0 +1,42 @@
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:nwc="clr-namespace:NeeView.Windows.Controls"
+                    xmlns:nrl="clr-namespace:NeeView.Runtime.LayoutPanel">
+
+    <Style TargetType="{x:Type ListBox}" BasedOn="{StaticResource NVListBox}" />
+    <Style TargetType="{x:Type ListBoxItem}" BasedOn="{StaticResource NVListBoxItem}" />
+
+    <Style TargetType="{x:Type ListView}" BasedOn="{StaticResource NVListView}" />
+    <Style TargetType="{x:Type ListViewItem}" BasedOn="{StaticResource NVListViewItem}" />
+    <Style TargetType="{x:Type GridViewColumnHeader}" BasedOn="{StaticResource NVGridViewColumnHeader}" />
+
+    <Style TargetType="{x:Type TreeView}" BasedOn="{StaticResource NVTreeView}" />
+    <Style TargetType="{x:Type TreeViewItem}" BasedOn="{StaticResource NVTreeViewItem}" />
+
+    <Style x:Key="{x:Type Menu}" TargetType="{x:Type Menu}" BasedOn="{StaticResource NVMenu}" />
+    <Style x:Key="{x:Type MenuItem}" TargetType="{x:Type MenuItem}" BasedOn="{StaticResource NVMenuItem}" />
+    <Style x:Key="{x:Type ContextMenu}" TargetType="{x:Type ContextMenu}" BasedOn="{StaticResource NVContextMenu}" />
+
+    <Style x:Key="{x:Type ComboBox}" TargetType="{x:Type ComboBox}" BasedOn="{StaticResource NVComboBox}" />
+    
+    <Style x:Key="{x:Type CheckBox}" TargetType="{x:Type CheckBox}" BasedOn="{StaticResource NVCheckBox}" />
+
+    <Style TargetType="TabControl" BasedOn="{StaticResource NVTabControl}" />
+    <Style TargetType="TabItem" BasedOn="{StaticResource NVTabItem}" />
+
+    <Style TargetType="GroupBox" BasedOn="{StaticResource NVGroupBox}" />
+
+    <Style x:Key="{x:Type TextBox}" TargetType="{x:Type TextBox}" BasedOn="{StaticResource NVTextBox}" />
+
+    <Style TargetType="{x:Type nwc:EnterTriggerTextBox}" BasedOn="{StaticResource NVEnterTriggerTextBox}" />
+
+    <Style x:Key="{x:Type Slider}" TargetType="{x:Type Slider}" BasedOn="{StaticResource NVSlider}" />
+
+    <Style x:Key="{x:Type nrl:LayoutPanelHeader}" TargetType="{x:Type nrl:LayoutPanelHeader}" BasedOn="{StaticResource NVLayoutPanelHeader}" />
+
+    <Style x:Key="{x:Type Button}" TargetType="{x:Type Button}" BasedOn="{StaticResource NVButton}" />
+    <Style x:Key="{x:Type RadioButton}" TargetType="{x:Type RadioButton}" BasedOn="{StaticResource NVRadioButton}" />
+
+    <Style x:Key="{x:Type Hyperlink}" TargetType="{x:Type Hyperlink}" BasedOn="{StaticResource NVHyperlink}" />
+
+</ResourceDictionary>

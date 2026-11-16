@@ -1,0 +1,51 @@
+﻿<UserControl x:Class="NeeView.Setting.SettingItemFileAssociationGroupControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:NeeView.Setting"
+             xmlns:nv="clr-namespace:NeeView"
+             mc:Ignorable="d" 
+            xmlns:properties="clr-namespace:NeeView.Properties"
+             d:DesignHeight="450" d:DesignWidth="800">
+    
+    <UserControl.Resources>
+        <DataTemplate DataType="{x:Type nv:FileAssociationAccessor}">
+            <StackPanel >
+                <CheckBox IsChecked="{Binding IsEnabled}">
+                    <StackPanel Orientation="Horizontal">
+                        <Image Width="16" Height="16" Source="{Binding BitmapSource}" Margin="2,0,0,0"/>
+                        <TextBlock Text="{Binding Extension}" MinWidth="64" Margin="2,0,0,0"/>
+                        <TextBlock Text="{Binding Description}" Margin="2,0,0,0"/>
+                    </StackPanel>
+                    <CheckBox.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="{properties:TextBinding FileAssociation.Menu.ChangeIcon}" Command="{Binding ChangeIconCommand}"/>
+                        </ContextMenu>
+                    </CheckBox.ContextMenu>
+                </CheckBox>
+            </StackPanel>
+        </DataTemplate>
+
+        <Style TargetType="Border">
+            <Setter Property="BorderBrush" Value="{DynamicResource Control.Border}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
+
+    </UserControl.Resources>
+
+    <Grid>
+        <GroupBox KeyboardNavigation.TabNavigation="Local">
+            <GroupBox.Header>
+                <CheckBox x:Name="HeaderCheckBox" Content="{Binding Title}" IsChecked="{Binding IsChecked}" TabIndex="1">
+                    <CheckBox.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="{properties:TextBinding FileAssociation.Menu.ChangeCategoryIcon}" Command="{Binding ChangeCategoryIconCommand}"/>
+                        </ContextMenu>
+                    </CheckBox.ContextMenu>
+                </CheckBox>
+            </GroupBox.Header>
+            <ItemsControl x:Name="AssociationListBox" ItemsSource="{Binding Items}" Margin="20,5,5,5" TabIndex="2" IsTabStop="False"/>
+        </GroupBox>
+    </Grid>
+</UserControl>

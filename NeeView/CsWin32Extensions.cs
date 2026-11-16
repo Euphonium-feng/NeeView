@@ -1,0 +1,37 @@
+﻿
+global using Win32Rect = Windows.Win32.Foundation.RECT;
+
+using System;
+using System.Runtime.InteropServices;
+
+// Additional P/Invoke definitions for CsWin32
+namespace NeeView.Win32.Extensions
+{
+    internal static partial class WindowMessages
+    {
+        internal const uint WM_SHNOTIFY = global::Windows.Win32.PInvoke.WM_USER + 1;
+    }
+
+    internal static partial class NativeMethods
+    {
+        [DllImport("ole32.dll", CharSet = CharSet.Unicode)]
+        public static extern void ReleaseStgMedium(ref System.Runtime.InteropServices.ComTypes.STGMEDIUM pmedium);
+    }
+
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct SHNOTIFYSTRUCT
+    {
+        public IntPtr dwItem1;
+        public IntPtr dwItem2;
+    }
+
+    internal static class Win32RectExtensions
+    {
+        public static string ToDispString(this Win32Rect rect)
+        {
+            return $"{{X={rect.X}, Y={rect.Y}, Width={rect.Width}, Height={rect.Height}}}";
+        }
+    }
+}
+

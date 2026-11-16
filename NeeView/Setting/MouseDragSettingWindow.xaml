@@ -1,0 +1,46 @@
+﻿<Window x:Class="NeeView.Setting.MouseDragSettingWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:local="clr-namespace:NeeView.Setting"
+        xmlns:properties="clr-namespace:NeeView.Properties" mc:Ignorable="d" Style="{StaticResource ChromeDialogStyle}" Title="{properties:TextBinding MouseDragSettingWindow.Title}"
+        Height="400" Width="512">
+
+    <Window.Resources>
+
+        <Style TargetType="{x:Type Button}" BasedOn="{StaticResource NVButton}">
+            <Setter Property="MinWidth" Value="80" />
+            <Setter Property="MinHeight" Value="28" />
+            <Setter Property="Margin" Value="5" />
+            <Setter Property="Padding" Value="10,5" />
+        </Style>
+
+    </Window.Resources>
+
+    <Grid>
+
+        <DockPanel Margin="10">
+
+            <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button x:Name="OkButton" Content="{properties:TextBinding Word.Close}" Click="OkButton_Click" TabIndex="10" />
+            </StackPanel>
+
+            <TabControl>
+                <TabItem x:Name="MouseGestureTab">
+                    <TabItem.Header>
+                        <Grid MinWidth="60" MinHeight="30">
+                            <TextBlock Text="{properties:TextBinding EditCommandWindow.Tab.Gesture}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Grid>
+                    </TabItem.Header>
+                    <local:DragActionGestureControl x:Name="MouseGesture"/>
+                </TabItem>
+
+                <TabItem x:Name="ParameterTab">
+                    <TabItem.Header>
+                        <Grid MinWidth="60" MinHeight="30">
+                            <TextBlock Text="{properties:TextBinding EditCommandWindow.Tab.Parameter}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Grid>
+                    </TabItem.Header>
+                    <local:DragActionParameterControl x:Name="Parameter" />
+                </TabItem>
+            </TabControl>
+        </DockPanel>
+    </Grid>
+</Window>

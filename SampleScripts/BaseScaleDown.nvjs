@@ -1,0 +1,7 @@
+// @name Base Scale Reduction
+// @description Reduce the base scale.
+
+if (nv.Config.View.IsBaseScaleEnabled)
+{
+    nv.Config.View.BaseScale -= 0.1
+}

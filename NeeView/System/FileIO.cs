@@ -1,0 +1,998 @@
+﻿using NeeLaboratory.Linq;
+using NeeView.IO;
+using NeeView.Properties;
+using NeeView.Windows;
+using System;
+using System.Buffers;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
+using Windows.Win32;
+
+// TODO: UI要素の除外
+
+namespace NeeView
+{
+    /// <summary>
+    /// File I/O
+    /// </summary>
+    public static partial class FileIO
+    {
+        [GeneratedRegex(@"^(CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9])(\.|$)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+        private static partial Regex _unavailableFileNameRegex { get; }
+
+        [GeneratedRegex(@"^(.+)\((\d+)\)$")]
+        private static partial Regex _fileNumberRegex { get; }
+
+        [GeneratedRegex(@"[/\\]")]
+        private static partial Regex _separateRegex { get; }
+
+        [GeneratedRegex(@"^[a-zA-Z]:\\?$")]
+        private static partial Regex _driveRegex { get; }
+
+        [GeneratedRegex(@"^[a-z]:")]
+        private static partial Regex _lowerDriveLetterRegex { get; }
+
+        [GeneratedRegex(@":$")]
+        private static partial Regex _colonTerminalRegex { get; }
+
+
+        public static event EventHandler<FileReplaceEventHander>? Replacing;
+        public static event EventHandler<FileReplaceEventHander>? Replaced;
+
+
+        /// <summary>
+        /// ファイルかディレクトリの存在チェック
+        /// </summary>
+        public static bool EntryExists([NotNullWhen(true)] string? path)
+        {
+            return FileExists(path) || DirectoryExists(path);
+        }
+
+        public static bool FileExists([NotNullWhen(true)] string? path)
+        {
+            using var scope = new SystemLockMonitor();
+            return File.Exists(path);
+        }
+
+        public static bool DirectoryExists([NotNullWhen(true)] string? path)
+        {
+            using var scope = new SystemLockMonitor();
+            return Directory.Exists(path);
+        }
+
+        public static bool Exists([NotNullWhen(true)] FileSystemInfo? info)
+        {
+            if (info is null) return false;
+
+            using var scope = new SystemLockMonitor();
+            return info.Exists;
+        }
+
+        public static FileAttributes GetAttributes(string path)
+        {
+            using var scope = new SystemLockMonitor();
+            return File.GetAttributes(path);
+        }
+
+        public static DateTime GetLastWriteTime(string path)
+        {
+            using var scope = new SystemLockMonitor();
+            return File.GetLastWriteTime(path);
+        }
+
+        public static FileStream Open(string path, FileMode mode, FileAccess access, FileShare share)
+        {
+            using var scope = new SystemLockMonitor();
+            return File.Open(path, mode, access, share);
+        }
+
+        /// <summary>
+        /// FileSystemInfoを取得
+        /// </summary>
+        /// <param name="path"></param>
+        /// <returns></returns>
+        public static FileSystemInfo CreateFileSystemInfo(string path)
+        {
+            var directoryInfo = new DirectoryInfo(path);
+            if (FileIO.Exists(directoryInfo)) return directoryInfo;
+            else return new FileInfo(path);
+        }
+
+        /// <summary>
+        /// ファイル上書きチェック
+        /// </summary>
+        /// <param name="path"></param>
+        /// <param name="isOverwrite"></param>
+        /// <exception cref="IOException"></exception>
+        public static void CheckOverwrite(string path, bool isOverwrite)
+        {
+            if (!isOverwrite && FileExists(path)) throw new IOException($"File already exists: {path}");
+        }
+
+        /// <summary>
+        /// ファイル上書き前処理
+        /// </summary>
+        /// <param name="path"></param>
+        /// <param name="isOverwrite"></param>
+        /// <exception cref="IOException"></exception>
+        public static void ReadyOverwrite(string path, bool isOverwrite)
+        {
+            if (FileExists(path))
+            {
+                if (isOverwrite)
+                {
+                    File.Delete(path);
+                }
+                else
+                {
+                    throw new IOException($"File already exists: {path}");
+                }
+            }
+        }
+
+        /// <summary>
+        /// パス名の正規化
+        /// </summary>
+        /// <remarks>
+        /// パスの存在チェックを行うので重い処理です
+        /// </remarks>
+        /// <param name="source"></param>
+        /// <returns></returns>
+        public static string GetNormalizedPath(string? source)
+        {
+            if (string.IsNullOrEmpty(source)) return "";
+
+            // 区切り文字修正
+            source = _separateRegex.Replace(source, "\\").TrimEnd('\\');
+
+            // Chop long-path prefix
+            if (source.StartsWith(@"\\?\")) source = source[4..];
+
+            // ドライブレター修正
+            source = _lowerDriveLetterRegex.Replace(source, m => m.Value.ToUpperInvariant());
+            source = _colonTerminalRegex.Replace(source, ":\\");
+
+            // フルパス
+            source = Path.GetFullPath(source);
+
+            if (EntryExists(source))
+            {
+                // 大文字・小文字をファイルシステム情報にあわせる
+                var path = GetLongPathName(source);
+                // UNCパスの正規化
+                return UncPathTools.ConvertPathToNormalized(path);
+            }
+            else
+            {
+                // アーカイブパスの可能性あり。有効なパス部分のみ正規化
+                var path = "";
+                var parts = LoosePath.Split(source);
+                foreach (var part in parts)
+                {
+                    path = LoosePath.Combine(path, part);
+                    if (FileExists(path))
+                    {
+                        path = GetLongPathName(path);
+                        path = LoosePath.Combine(path, source[path.Length..]);
+                        break;
+                    }
+                }
+                // UNCパスの正規化
+                return UncPathTools.ConvertPathToNormalized(path);
+            }
+        }
+
+        /// <summary>
+        /// ロングパス名を取得して大文字・小文字をファイルシステム情報にあわせる
+        /// </summary>
+        /// <param name="source"></param>
+        /// <returns></returns>
+        private static string GetLongPathName(string source)
+        {
+            if (string.IsNullOrEmpty(source)) return "";
+
+            var buffer = ArrayPool<char>.Shared.Rent(1024); // 上限は1024文字
+            try
+            {
+                Span<char> longPath = buffer;
+                var length = PInvoke.GetLongPathName(source, longPath);
+                if (length == 0 || length > longPath.Length)
+                {
+                    return source;
+                }
+                return longPath[..(int)length].ToString();
+            }
+            finally
+            {
+                ArrayPool<char>.Shared.Return(buffer);
+            }
+        }
+
+        /// <summary>
+        /// パスの衝突を連番をつけて回避
+        /// </summary>
+        public static string CreateUniquePath(string path)
+        {
+            if (FileExists(path))
+            {
+                return LoosePath.CreateUniquePath(path, true, EntryExists);
+            }
+            else if (DirectoryExists(path))
+            {
+                return LoosePath.CreateUniquePath(path, false, EntryExists);
+            }
+            else
+            {
+                return path;
+            }
+        }
+
+        /// <summary>
+        /// ディレクトリが親子関係にあるかをチェック
+        /// </summary>
+        /// <returns></returns>
+        public static bool IsSubDirectoryRelationship(DirectoryInfo dir1, DirectoryInfo dir2)
+        {
+            if (dir1 == dir2) return true;
+
+            var path1 = LoosePath.TrimDirectoryEnd(LoosePath.NormalizeSeparator(dir1.FullName)).ToUpperInvariant();
+            var path2 = LoosePath.TrimDirectoryEnd(LoosePath.NormalizeSeparator(dir2.FullName)).ToUpperInvariant();
+            if (path1.Length < path2.Length)
+            {
+                return path2.StartsWith(path1, StringComparison.OrdinalIgnoreCase);
+            }
+            else
+            {
+                return path1.StartsWith(path2, StringComparison.OrdinalIgnoreCase);
+            }
+        }
+
+        /// <summary>
+        /// DirectoryInfoの等価判定
+        /// </summary>
+        public static bool DirectoryEquals(DirectoryInfo dir1, DirectoryInfo dir2)
+        {
+            if (dir1 == null && dir2 == null) return true;
+            if (dir1 == null || dir2 == null) return false;
+
+            var path1 = LoosePath.NormalizeSeparator(dir1.FullName).TrimEnd(LoosePath.Separators).ToUpperInvariant();
+            var path2 = LoosePath.NormalizeSeparator(dir2.FullName).TrimEnd(LoosePath.Separators).ToUpperInvariant();
+            return path1 == path2;
+        }
+
+        /// <summary>
+        /// ファイルロックチェック
+        /// </summary>
+        /// <param name="file"></param>
+        /// <returns></returns>
+        public static bool IsFileLocked(FileInfo file, FileShare share = FileShare.None)
+        {
+            try
+            {
+                using (FileStream stream = file.Open(FileMode.Open, FileAccess.Read, share))
+                {
+                    stream.Close();
+                }
+            }
+            catch (IOException)
+            {
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// ファイルが読み込み可能になるまで待機
+        /// </summary>
+        /// <param name="file"></param>
+        /// <param name="timeout"></param>
+        /// <param name="token"></param>
+        /// <returns></returns>
+        /// <exception cref="TimeoutException"></exception>
+        public static async Task WaitFileReadableAsync(FileInfo file, TimeSpan timeout, CancellationToken token)
+        {
+            var time = new TimeSpan();
+            var interval = TimeSpan.FromMilliseconds(500);
+            while (IsFileLocked(file, FileShare.Read))
+            {
+                if (time > timeout) throw new TimeoutException();
+                await Task.Delay(interval, token);
+                time += interval;
+            }
+        }
+
+        /// <summary>
+        /// ディレクトリ確保
+        /// </summary>
+        /// <param name="path"></param>
+        /// <returns></returns>
+        private static string EnsureDirectory(string path)
+        {
+            var directoryPath = LoosePath.TrimDirectoryEnd(path);
+            var dir = new DirectoryInfo(LoosePath.TrimDirectoryEnd(directoryPath));
+            if (!FileIO.Exists(dir))
+            {
+                dir.Create();
+            }
+            return directoryPath;
+        }
+
+        /// <summary>
+        /// ブックを閉じてアーカイブを開放する。
+        /// </summary>
+        /// <remarks>
+        /// ファイル操作前の処理用。
+        /// </remarks>
+        /// <param name="path"></param>
+        /// <returns></returns>
+        private static async Task<CloseBookResult> CloseBookAsync(string path)
+        {
+            return await CloseBookAsync([path]);
+        }
+
+        private static async Task<CloseBookResult> CloseBookAsync(IEnumerable<string> paths)
+        {
+            // 開いている本であるならば閉じる
+            var result = await BookHubTools.CloseBookAsync(paths);
+
+            // 全てのファイルロックをはずす
+            await ArchiveManager.Current.UnlockAllArchivesAsync();
+
+            return result;
+        }
+
+        // 開いている本のページの削除処理
+        private static void ValidateBookPages(IEnumerable<string> paths)
+        {
+            var book = BookOperation.Current.Book;
+            if (book is null) return;
+            var pages = paths.Select(e => book.Pages.GetPageWithEntryFullName(e)).WhereNotNull();
+            if (!pages.Any()) return;
+            BookOperation.Current.ValidatePages(pages);
+        }
+
+        /// <summary>
+        /// ドライブ表示名を取得
+        /// </summary>
+        /// <param name="s"></param>
+        /// <param name="index"></param>
+        /// <returns></returns>
+        public static string? GetDriveDisplayName(string s)
+        {
+            try
+            {
+                if (s is not null && _driveRegex.IsMatch(s))
+                {
+                    var driveInfo = new DriveInfo(s);
+                    return GetDriveLabel(driveInfo);
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine(ex.Message);
+            }
+
+            return null;
+        }
+
+        private static string GetDriveLabel(DriveInfo driveInfo)
+        {
+            var driveName = driveInfo.Name.TrimEnd('\\');
+            var volumeLabel = driveInfo.DriveType.ToDisplayString();
+            var driveLabel = $"{volumeLabel} ({driveName})";
+
+            try
+            {
+                // NOTE: ドライブによってはこのプロパティの取得に時間がかかる
+                var IsReady = driveInfo.IsReady;
+                if (driveInfo.IsReady)
+                {
+                    volumeLabel = string.IsNullOrEmpty(driveInfo.VolumeLabel) ? driveInfo.DriveType.ToDisplayString() : driveInfo.VolumeLabel;
+                    driveLabel = $"{volumeLabel} ({driveName})";
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine(ex.Message);
+            }
+
+            return driveLabel;
+        }
+
+        /// <summary>
+        /// OpenRead Shared
+        /// </summary>
+        /// <remarks>
+        /// 既定で FileShare.Delete 属性を付加している。これにより他プロセスでの削除がロックされないことを期待できる
+        /// </remarks>
+        /// <param name="path"></param>
+        /// <param name="share"></param>
+        /// <returns></returns>
+        public static FileStream OpenReadShared(string path, FileShare share = FileShare.Read | FileShare.Delete)
+        {
+            return new FileStream(path, FileMode.Open, FileAccess.Read, share);
+        }
+
+        /// <summary>
+        /// ReadOllBytes Shared
+        /// </summary>
+        /// <remarks>
+        /// 既定で FileShare.Delete 属性を付加している。これにより他プロセスでの削除がロックされないことを期待できる
+        /// </remarks>
+        /// <param name="path"></param>
+        /// <param name="share"></param>
+        /// <returns></returns>
+        public static byte[] ReadAllBytesShared(string path, FileShare share = FileShare.Read | FileShare.Delete)
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, share);
+            var bytes = new byte[stream.Length];
+            stream.ReadExactly(bytes);
+            return bytes;
+        }
+
+        /// <summary>
+        /// WriteAllBytes (FlushToDisk)
+        /// </summary>
+        /// <param name="path"></param>
+        /// <param name="bytes"></param>
+        /// <param name="share"></param>
+        public static void WriteAllBytesFlushed(string path, byte[] bytes, FileShare share = FileShare.Read)
+        {
+            using var fs = new FileStream(path, FileMode.Create, FileAccess.Write, share, bufferSize: 4096, FileOptions.WriteThrough);
+            fs.Write(bytes);
+            fs.Flush(true);
+        }
+
+        /// <summary>
+        /// WriteAllBytes + Replace
+        /// </summary>
+        /// <remarls>
+        /// 設定ファイル用。
+        /// データ保存の確実性を高めるのとファイルロック例外回避が目的。
+        /// </remarls>
+        /// <param name="path"></param>
+        /// <param name="bytes"></param>
+        /// <param name="backupFileName"></param>
+        public static void WriteAllBytesDurable(string path, byte[] bytes, string? backupFileName)
+        {
+            var temp = Temporary.CreateWorkFileName(path);
+            try
+            {
+                WriteAllBytesFlushed(temp, bytes, FileShare.None);
+                Replace(temp, path, backupFileName, retryCount: 10, retryIntervalMillisecond: 100);
+            }
+            catch
+            {
+                File.Delete(temp);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// ファイルを置き換える
+        /// </summary>
+        /// <remarks>
+        /// 標準の Replace だとファイルロックの影響を受けやすいので、atomic write で置き換えている。
+        /// リトライ処理を追加することでさらに堅牢にしている。
+        /// </remarks>
+        /// <param name="sourceFileName">元ファイル名</param>
+        /// <param name="destinationFileName">置き換えファイル名</param>
+        /// <param name="destinationBackupFileName">バックアップファイル名</param>
+        public static void Replace(string sourceFileName, string destinationFileName, string? destinationBackupFileName)
+        {
+            Replace(sourceFileName, destinationFileName, destinationBackupFileName, retryCount: 10, retryIntervalMillisecond: 100);
+        }
+
+        /// <summary>
+        /// ファイルを置き換える
+        /// </summary>
+        /// <remarks>
+        /// 標準の Replace だとファイルロックの影響を受けやすいので、atomic write で置き換えている。
+        /// リトライ処理を追加することでさらに堅牢にしている。
+        /// </remarks>
+        /// <param name="sourceFileName"></param>
+        /// <param name="destinationFileName"></param>
+        /// <param name="destinationBackupFileName"></param>
+        /// <param name="retryCount">リトライ回数</param>
+        /// <param name="retryIntervalMillisecond">リトライ間隔</param>
+        /// <exception cref="IOException"></exception>
+        public static void Replace(string sourceFileName, string destinationFileName, string? destinationBackupFileName, int retryCount, int retryIntervalMillisecond)
+        {
+            if (destinationBackupFileName != null && FileExists(destinationFileName))
+            {
+                File.Copy(destinationFileName, destinationBackupFileName, overwrite: true);
+            }
+
+            Exception? lastException = null;
+            for (int i = 0; i < retryCount; i++)
+            {
+                try
+                {
+                    File.Move(sourceFileName, destinationFileName, overwrite: true);
+                    return;
+                }
+                catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+                {
+                    lastException = ex;
+                    Thread.Sleep(retryIntervalMillisecond);
+                }
+            }
+            throw lastException ?? new IOException("Replace failed after retries.");
+        }
+
+        /// <summary>
+        /// ファイルを置き換える。
+        /// </summary>
+        /// <remarks>
+        /// Replacing イベントと Replaced イベントを発行する。
+        /// </remarks>
+        /// <param name="sourceFileName"></param>
+        /// <param name="destinationFileName"></param>
+        /// <param name="destinationBackupFileName"></param>
+        public static void ReplaceWithEvent(string sourceFileName, string destinationFileName, string? destinationBackupFileName)
+        {
+            var args = new FileReplaceEventHander(sourceFileName, destinationFileName, destinationBackupFileName);
+            Replacing?.Invoke(null, args);
+            try
+            {
+                Replace(sourceFileName, destinationFileName, destinationBackupFileName);
+            }
+            finally
+            {
+                Replaced?.Invoke(null, args);
+            }
+        }
+
+        public static bool IsArchivePath(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+            {
+                return false;
+            }
+            if (EntryExists(path))
+            {
+                return false;
+            }
+
+            for (var s = LoosePath.GetDirectoryName(path); !string.IsNullOrEmpty(s); s = LoosePath.GetDirectoryName(s))
+            {
+                if (FileExists(s))
+                {
+                    return true;
+                }
+                if (DirectoryExists(s))
+                {
+                    return false;
+                }
+            }
+            return false;
+        }
+
+        #region Copy
+
+        /// <summary>
+        /// 非同期ファイルコピー
+        /// </summary>
+        /// <param name="sourceFileName"></param>
+        /// <param name="destFileName"></param>
+        /// <param name="isOverwrite"></param>
+        /// <param name="token"></param>
+        /// <returns></returns>
+        public static async Task CopyFileAsync(string sourceFileName, string destFileName, bool isOverwrite, bool createDirectory, CancellationToken token)
+        {
+            await Task.Run(() =>
+            {
+                if (createDirectory)
+                {
+                    var outputDir = System.IO.Path.GetDirectoryName(destFileName) ?? throw new IOException($"Illegal path: {destFileName}");
+                    Directory.CreateDirectory(outputDir);
+                }
+
+                File.Copy(sourceFileName, destFileName, isOverwrite);
+            }, token);
+        }
+
+        /// <summary>
+        /// ファイル、ディレクトリーを指定のフォルダーにコピーする
+        /// </summary>
+        public static async Task SHCopyToFolderAsync(IEnumerable<string> paths, string toDirectory, CancellationToken token)
+        {
+            await Task.Run(() => SHCopyToFolder(paths, toDirectory), token);
+        }
+
+        public static async Task SHCopyAsync(string source, string destination, CancellationToken token)
+        {
+            if (LoosePath.IsDirectoryEnd(destination) || DirectoryExists(destination))
+            {
+                await Task.Run(() => SHCopyToFolder([source], destination), token);
+            }
+            else
+            {
+                await Task.Run(() => SHCopy(source, destination), token);
+            }
+        }
+
+        private static void SHCopyToFolder(IEnumerable<string> sourcePaths, string destDirectoryPath)
+        {
+            using var scope = WorkingProgressWatcher.Current.Lock("Copying files...");
+            FileOperation.CopyToFolder(WindowTools.GetWindowHandle(), sourcePaths, destDirectoryPath);
+        }
+
+        private static void SHCopy(string sourcePath, string destPath)
+        {
+            using var scope = WorkingProgressWatcher.Current.Lock("Copying files...");
+            FileOperation.Copy(WindowTools.GetWindowHandle(), sourcePath, destPath);
+        }
+
+        #endregion Copy
+
+        #region Move
+
+        /// <summary>
+        /// ファイル、ディレクトリーを指定のフォルダーに移動する
+        /// </summary>
+        public static async Task SHMoveToFolderAsync(IEnumerable<string> paths, string toDirectory, CancellationToken token)
+        {
+            await CloseBookAsync(paths);
+
+            await Task.Run(() => SHMoveToFolder(paths, toDirectory), token);
+
+            ValidateBookPages(paths);
+        }
+
+        public static async Task SHMoveAsync(string source, string destination, CancellationToken token)
+        {
+            await CloseBookAsync([source]);
+
+            if (LoosePath.IsDirectoryEnd(destination) || DirectoryExists(destination))
+            {
+                await Task.Run(() => SHMoveToFolder([source], destination), token);
+            }
+            else
+            {
+                await Task.Run(() => SHMove(source, destination), token);
+            }
+
+            ValidateBookPages([source]);
+        }
+
+        private static void SHMoveToFolder(IEnumerable<string> sourcePaths, string destDirectoryPath)
+        {
+            using var scope = WorkingProgressWatcher.Current.Lock("Moving files...");
+
+            var result = FileOperation.MoveToFolder(WindowTools.GetWindowHandle(), sourcePaths, destDirectoryPath);
+
+            BookMementoRenameRecursive(result.Items);
+        }
+
+        private static void SHMove(string sourcePath, string destPath)
+        {
+            using var scope = WorkingProgressWatcher.Current.Lock("Moving files...");
+
+            var result = FileOperation.Move(WindowTools.GetWindowHandle(), sourcePath, destPath);
+
+            BookMementoRenameRecursive(result.Items);
+        }
+
+        private static void BookMementoRenameRecursive(IEnumerable<FolderOperatonItemResult> items)
+        {
+            foreach (var item in items)
+            {
+                BookMementoTools.RenameRecursive(item.Source, item.Destination);
+            }
+        }
+
+        #endregion Move
+
+        #region Delete
+
+        // ファイル削除 (Direct)
+        public static void DeleteFile(string filename)
+        {
+            new FileInfo(filename).Delete();
+        }
+
+        /// <summary>
+        /// ファイル削除
+        /// </summary>
+        public static async Task DeleteAsync(string path, CancellationToken token)
+        {
+            await DeleteAsync([path], token);
+        }
+
+        /// <summary>
+        /// ファイル削除
+        /// </summary>
+        public static async Task DeleteAsync(IEnumerable<string> paths, CancellationToken token)
+        {
+            await CloseBookAsync(paths);
+
+            await Task.Run(() => SHDelete(paths), token);
+        }
+
+        private static void SHDelete(IEnumerable<string> paths)
+        {
+            using var scope = WorkingProgressWatcher.Current.Lock("Deleting files...");
+
+            var result = FileOperation.Delete(WindowTools.GetWindowHandle(), paths, Config.Current.System.IsRemoveWantNukeWarning);
+        }
+
+        #endregion Delete
+
+        #region Rename
+
+        /// <summary>
+        /// ファイル名に無効な文字が含まれているか
+        /// </summary>
+        public static bool ContainsInvalidFileNameChars(string newName)
+        {
+            char[] invalidChars = System.IO.Path.GetInvalidFileNameChars();
+            int invalidCharsIndex = newName.IndexOfAny(invalidChars);
+            return invalidCharsIndex >= 0;
+        }
+
+        /// <summary>
+        /// Rename用変更後ファイル名を生成
+        /// </summary>
+        public static string? CreateRenameDst(string sourcePath, string newName, bool showConfirmDialog)
+        {
+            if (sourcePath is null) throw new ArgumentNullException(nameof(sourcePath));
+            if (newName is null) throw new ArgumentNullException(nameof(newName));
+
+            var name = CheckInvalidFilename(newName, showConfirmDialog);
+            if (name is null) return null;
+
+            string src = sourcePath;
+            string folder = System.IO.Path.GetDirectoryName(src) ?? throw new InvalidOperationException("Cannot get parent directory");
+            string? dst = System.IO.Path.Combine(folder, name);
+
+            // 全く同じ名前なら処理不要
+            if (src == dst) return null;
+
+            // 拡張子変更確認
+            dst = CheckChangeExtension(src, dst, showConfirmDialog);
+            if (dst is null) return null;
+
+            // 重複ファイル名回避
+            dst = CheckDuplicateFilename(src, dst, showConfirmDialog);
+            if (dst is null) return null;
+
+            return dst;
+        }
+
+        /// <summary>
+        /// 無効なファイル名チェック
+        /// </summary>
+        public static string? CheckInvalidFilename(string src, string dst, bool showConfirmDialog)
+        {
+            var directory = LoosePath.GetDirectoryName(dst);
+            var filename = LoosePath.GetFileName(dst);
+
+            filename = CheckInvalidFilename(filename, showConfirmDialog);
+            if (filename is null) return null;
+
+            return LoosePath.Combine(directory, filename);
+        }
+
+        /// <summary>
+        /// 無効なファイル名チェック
+        /// </summary>
+        public static string? CheckInvalidFilename(string filename, bool showConfirmDialog)
+        {
+            // 末尾のピリオド等は無効
+            filename = filename.Trim().TrimEnd(' ', '.');
+
+            // ファイル名に使用できない
+            if (string.IsNullOrWhiteSpace(filename))
+            {
+                if (showConfirmDialog)
+                {
+                    var dialog = new MessageDialog(TextResources.GetString("FileRenameErrorDialog.Title"), TextResources.GetString("FileRenameWrongDialog.Message"));
+                    dialog.ShowDialog();
+                }
+                return null;
+            }
+
+            //ファイル名に使用できない文字
+            char[] invalidChars = System.IO.Path.GetInvalidFileNameChars();
+            int invalidCharsIndex = filename.IndexOfAny(invalidChars);
+            if (invalidCharsIndex >= 0)
+            {
+                if (showConfirmDialog)
+                {
+                    var invalids = string.Join(" ", filename.Where(e => invalidChars.Contains(e)).Distinct());
+                    var dialog = new MessageDialog(TextResources.GetString("FileRenameErrorDialog.Title"), $"{TextResources.GetString("FileRenameInvalidDialog.Message")}\n\n{invalids}");
+                    dialog.ShowDialog();
+                }
+                return null;
+            }
+
+            // ファイル名に使用できない
+            var match = _unavailableFileNameRegex.Match(filename);
+            if (match.Success)
+            {
+                if (showConfirmDialog)
+                {
+                    var dialog = new MessageDialog(TextResources.GetString("FileRenameErrorDialog.Title"), $"{TextResources.GetString("FileRenameWrongDeviceDialog.Message")}\n\n{match.Groups[1].Value.ToUpperInvariant()}");
+                    dialog.ShowDialog();
+                }
+                return null;
+            }
+
+            return filename;
+        }
+
+        /// <summary>
+        /// 拡張子変更確認
+        /// </summary>
+        public static string? CheckChangeExtension(string src, string dst, bool showConfirmDialog)
+        {
+            // ディレクトリはチェク不要
+            if (DirectoryExists(src)) return dst;
+
+            var srcExt = System.IO.Path.GetExtension(src);
+            var dstExt = System.IO.Path.GetExtension(dst);
+            if (string.Compare(srcExt, dstExt, StringComparison.OrdinalIgnoreCase) != 0)
+            {
+                if (showConfirmDialog)
+                {
+                    var dialog = new MessageDialog(TextResources.GetString("FileRenameExtensionDialog.Title"), TextResources.GetString("FileRenameExtensionDialog.Message"));
+                    dialog.Commands.Add(UICommands.Yes);
+                    dialog.Commands.Add(UICommands.No);
+                    var answer = dialog.ShowDialog();
+                    if (answer.Command != UICommands.Yes)
+                    {
+                        return null;
+                    }
+                }
+            }
+
+            return dst;
+        }
+
+        /// <summary>
+        /// 重複ファイル名回避
+        /// </summary>
+        public static string? CheckDuplicateFilename(string src, string dst, bool showConfirmDialog)
+        {
+            // 対象が存在していなければ許可
+            if (!EntryExists(dst)) return dst;
+
+            // 大文字小文字の違いを許可
+            if (string.Compare(src, dst, StringComparison.OrdinalIgnoreCase) == 0) return dst;
+
+            string dstBase = dst;
+            string dir = System.IO.Path.GetDirectoryName(dst) ?? throw new InvalidOperationException("Cannot get parent directory");
+            string name = System.IO.Path.GetFileNameWithoutExtension(dst);
+            string ext = System.IO.Path.GetExtension(dst);
+            int count = 1;
+
+            do
+            {
+                dst = $"{dir}\\{name} ({++count}){ext}";
+            }
+            while (EntryExists(dst));
+
+            // 確認
+            if (showConfirmDialog)
+            {
+                var dialog = new MessageDialog(TextResources.GetString("FileRenameConflictDialog.Title"), string.Format(CultureInfo.InvariantCulture, TextResources.GetString("FileRenameConflictDialog.Message"), Path.GetFileName(dstBase), Path.GetFileName(dst)));
+                dialog.Commands.Add(new UICommand("Word.Rename"));
+                dialog.Commands.Add(UICommands.Cancel);
+                var answer = dialog.ShowDialog();
+                if (answer.Command != dialog.Commands[0])
+                {
+                    return null;
+                }
+            }
+
+            return dst;
+        }
+
+        /// <summary>
+        /// ファイル名前変更。現在ブックにも反映させる
+        /// </summary>
+        public static async Task<bool> RenameAsync(string src, string dst, bool restoreBook)
+        {
+            var closeBookResult = await CloseBookAsync(src);
+
+            // rename main
+            var isSuccess = RenameRetry(src, dst);
+            if (!isSuccess) return false;
+
+            // 本を開き直す
+            if (restoreBook && closeBookResult.IsClosed)
+            {
+                BookHubTools.RestoreBook(dst, src, closeBookResult.RequestLoadCount);
+            }
+
+            return true;
+        }
+
+        private static bool RenameRetry(string src, string dst)
+        {
+            while (true)
+            {
+                try
+                {
+                    RenameCore(src, dst);
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    MessageDialogResult? answer = null;
+                    AppDispatcher.Invoke(() =>
+                    {
+                        var retryConfirm = new MessageDialog(TextResources.GetString("FileRenameFailedDialog.Title"), $"{TextResources.GetString("FileRenameFailedDialog.Message")}\n\n{ex.Message}");
+                        retryConfirm.Commands.Add(UICommands.Retry);
+                        retryConfirm.Commands.Add(UICommands.Cancel);
+                        answer = retryConfirm.ShowDialog();
+                    });
+                    if (answer?.Command == UICommands.Retry)
+                    {
+                        continue;
+                    }
+                    else
+                    {
+                        return false;
+                    }
+                }
+            }
+        }
+
+
+        /// <summary>
+        /// ファイル名変更
+        /// </summary>
+        /// <param name="src">変更前のパス</param>
+        /// <param name="dst">変更後のパス</param>
+        /// <exception cref="FileNotFoundException">srcファイルが見つかりません</exception>
+        private static void RenameCore(string src, string dst)
+        {
+            try
+            {
+                if (DirectoryExists(src))
+                {
+                    System.IO.Directory.Move(src, dst);
+                }
+                else if (FileExists(src))
+                {
+                    System.IO.File.Move(src, dst);
+                }
+                else
+                {
+                    throw new FileNotFoundException();
+                }
+            }
+            catch (IOException) when (string.Compare(src, dst, StringComparison.OrdinalIgnoreCase) == 0)
+            {
+                // 大文字小文字の違いだけである場合はWIN32APIで処理する
+                // .NET6 では不要？
+                PInvoke.MoveFile(src, dst);
+            }
+        }
+
+        #endregion Rename
+    }
+
+
+    public class FileReplaceEventHander : EventArgs
+    {
+        public string SourceFileName { get; }
+        public string DestinationFileName { get; }
+        public string? DestinationBackupFileName { get; }
+        public FileReplaceEventHander(string sourceFileName, string destinationFileName, string? destinationBackupFileName)
+        {
+            SourceFileName = sourceFileName;
+            DestinationFileName = destinationFileName;
+            DestinationBackupFileName = destinationBackupFileName;
+        }
+    }
+}

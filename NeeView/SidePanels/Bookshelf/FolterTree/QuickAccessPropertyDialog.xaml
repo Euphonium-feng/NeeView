@@ -1,0 +1,45 @@
+﻿<Window x:Class="NeeView.QuickAccessPropertyDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:NeeView"
+        xmlns:nwc="clr-namespace:NeeView.Windows.Controls"
+        xmlns:properties="clr-namespace:NeeView.Properties"
+        mc:Ignorable="d"
+        Style="{StaticResource ChromeDialogStyle}"
+        Title="{properties:TextBinding QuickAccessPropertyDialog.Title}" Height="220" Width="512">
+
+    <Window.Resources>
+        <ResourceDictionary>
+            <Style x:Key="ButtonStyle" TargetType="Button" BasedOn="{StaticResource NVDialogButton}" />
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <DockPanel Margin="5">
+
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="5">
+            <Button x:Name="OKButton" Style="{StaticResource ButtonStyle}" Content="{properties:TextBinding Word.OK}" Click="OKButton_Click" />
+            <Button x:Name="CancelButton" Style="{StaticResource ButtonStyle}" Content="{properties:TextBinding Word.Cancel}" Click="CancelButton_Click" />
+        </StackPanel>
+
+        <Grid Margin="10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition />
+                <RowDefinition />
+            </Grid.RowDefinitions>
+
+            <TextBlock Grid.Column="0" Grid.Row="0" Text="{properties:TextBinding Word.Name}" MinWidth="60" VerticalAlignment="Center" Margin="10" />
+            <TextBox Grid.Column="1" Grid.Row="0" VerticalAlignment="Center" Text="{Binding Name}" />
+
+            <TextBlock Grid.Column="0" Grid.Row="1" Text="{properties:TextBinding Word.Path}" MinWidth="60" VerticalAlignment="Center" Margin="10" />
+            <nwc:FileNameBox Grid.Column="1" Grid.Row="1" VerticalAlignment="Center" Text="{Binding Path, Mode=TwoWay}" FileDialogType="Directory"
+                    Note="{properties:TextBinding DestinationFolderEditDialog.Path.Remarks}" />
+        </Grid>
+
+    </DockPanel>
+</Window>

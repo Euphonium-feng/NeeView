@@ -1,0 +1,534 @@
+﻿//#define LOCAL_DEBUG
+
+using CommunityToolkit.Mvvm.ComponentModel;
+using Microsoft.Win32;
+using NeeLaboratory.ComponentModel;
+using NeeLaboratory.Generators;
+using NeeView.Properties;
+using System;
+using System.Collections.Generic;
+using System.Collections.Specialized;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
+using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows.Controls;
+
+namespace NeeView
+{
+
+    [LocalDebug]
+    public partial class PlaylistHub : ObservableObject
+    {
+        static PlaylistHub() => Current = new PlaylistHub();
+        public static PlaylistHub Current { get; }
+
+
+        private List<object> _playlistCollection = new();
+        private Playlist _playlist = Playlist.Dummy;
+        private int _playlistLockCount;
+        private bool _isPlaylistDirty;
+        private bool _isHide;
+
+        private PlaylistHub()
+        {
+        }
+
+
+        [Subscribable]
+        public event NotifyCollectionChangedEventHandler? PlaylistCollectionChanged;
+
+        [Subscribable]
+        public event EventHandler<PlaylistSavedEventArgs>? PlaylistSaved;
+
+        [Subscribable]
+        public event EventHandler? Refreshed;
+
+
+        public string DefaultPlaylist => Config.Current.Playlist.DefaultPlaylist;
+        public string NewPlaylist => string.IsNullOrEmpty(Config.Current.Playlist.PlaylistFolder) ? "" : Path.Combine(Config.Current.Playlist.PlaylistFolder, "NewPlaylist.nvpls");
+
+        // NOTE: Separatorを含むことがあるので、List<object>にしている
+        public List<object> PlaylistFiles
+        {
+            get
+            {
+                if (_playlistCollection is null)
+                {
+                    UpdatePlaylistCollection();
+                }
+                return _playlistCollection;
+            }
+            set { SetProperty(ref _playlistCollection, value); }
+        }
+
+        public string SelectedItem
+        {
+            get
+            {
+                return IsHide ? "" : Config.Current.Playlist.CurrentPlaylist;
+            }
+            set
+            {
+                if (SelectedItem != value)
+                {
+                    Config.Current.Playlist.CurrentPlaylist = value;
+                }
+            }
+        }
+
+        public Playlist Playlist
+        {
+            get { return _playlist; }
+        }
+
+        public string? FilterMessage
+        {
+            get { return Config.Current.Playlist.IsCurrentBookFilterEnabled ? LoosePath.GetFileName(BookOperation.Current.Address) : null; }
+        }
+
+        public bool IsHide
+        {
+            get { return _isHide; }
+            set
+            {
+                if (SetProperty(ref _isHide, value))
+                {
+                    OnPropertyChanged(nameof(SelectedItem));
+                }
+            }
+        }
+
+
+        /// <summary>
+        /// 初期化
+        /// </summary>
+        public void Initialize()
+        {
+            if (SelectedItem != Config.Current.Playlist.DefaultPlaylist)
+            {
+                if (!FileIO.FileExists(SelectedItem))
+                {
+                    SelectedItem = Config.Current.Playlist.DefaultPlaylist;
+                }
+            }
+
+            UpdatePlaylistCollection();
+
+            if (UserSettingTools.UserSettingFormat?.CompareTo(new FormatVersion(Environment.SolutionName, VersionNumber.Ver45_Alpha4)) <= 0)
+            {
+                AddAllPlaylistToFileResolver();
+            }
+
+            Config.Current.Playlist.SubscribePropertyChanged(nameof(PlaylistConfig.PlaylistFolder),
+                PlaylistFolder_Changed);
+
+            Config.Current.Playlist.SubscribePropertyChanged(nameof(PlaylistConfig.CurrentPlaylist),
+                (s, e) => OnPropertyChanged(nameof(SelectedItem)));
+
+            Config.Current.Playlist.SubscribePropertyChanged(nameof(PlaylistConfig.IsCurrentBookFilterEnabled),
+                (s, e) => OnPropertyChanged(nameof(FilterMessage)));
+
+            BookOperation.Current.BookChanged +=
+                (s, e) => OnPropertyChanged(nameof(FilterMessage));
+
+            this.SubscribePropertyChanged(nameof(SelectedItem),
+                (s, e) => SelectedItemChanged());
+
+            SetPlaylist(LoadPlaylist(this.SelectedItem));
+            _isPlaylistDirty = false;
+        }
+
+
+        private void PlaylistFolder_Changed(object? sender, PropertyChangedEventArgs e)
+        {
+            _playlist.Flush();
+
+            UpdatePlaylistCollection(keepSelectedItem: false);
+
+            this.SelectedItem = DefaultPlaylist;
+            OnPropertyChanged(nameof(SelectedItem));
+
+            UpdatePlaylist();
+        }
+
+        private void Playlist_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            _playlist.DelaySave();
+            PlaylistCollectionChanged?.Invoke(this, e);
+        }
+
+        private void Playlist_ItemRenamed(object? sender, PlaylistItemRenamedEventArgs e)
+        {
+            _playlist.DelaySave();
+        }
+
+        private void Playlist_Saved(object? sender, PlaylistSavedEventArgs e)
+        {
+            PlaylistSaved?.Invoke(this, e);
+        }
+
+        private void SelectedItemChanged()
+        {
+            if (!this.PlaylistFiles.Contains(SelectedItem))
+            {
+                UpdatePlaylistCollection();
+            }
+
+            UpdatePlaylist();
+        }
+
+        public static List<string> GetPlaylistFiles(bool includeDefault)
+        {
+            if (!string.IsNullOrEmpty(Config.Current.Playlist.PlaylistFolder))
+            {
+                try
+                {
+                    var items = new List<string>();
+                    if (includeDefault)
+                    {
+                        items.Add(Config.Current.Playlist.DefaultPlaylist);
+                    }
+                    var directory = new DirectoryInfo(System.IO.Path.GetFullPath(Config.Current.Playlist.PlaylistFolder));
+                    if (FileIO.Exists(directory))
+                    {
+                        var files = directory.GetFiles("*.nvpls")
+                            .Select(e => e.FullName)
+                            .Where(e => !includeDefault || e != Config.Current.Playlist.DefaultPlaylist)
+                            .OrderBy(e => e, NaturalSort.Comparer).ToList();
+
+                        items.AddRange(files);
+                    }
+                    return items;
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine(ex.Message);
+                }
+            }
+
+            return new List<string>();
+        }
+
+        [MemberNotNull(nameof(_playlistCollection))]
+        public void UpdatePlaylistCollection(bool keepSelectedItem = true)
+        {
+            _playlistLockCount++;
+            var selectedItem = this.SelectedItem;
+            try
+            {
+                var items = new List<object>();
+                items.AddRange(GetPlaylistFiles(true));
+
+                if (keepSelectedItem && selectedItem != null && !items.Any(e => selectedItem.Equals(e)))
+                {
+                    items.Add(new Separator());
+                    items.Add(selectedItem);
+                }
+
+                //this.PlaylistFiles = items;
+                _playlistCollection = items;
+                OnPropertyChanged(nameof(PlaylistFiles));
+            }
+            finally
+            {
+                if (keepSelectedItem)
+                {
+                    this.SelectedItem = selectedItem;
+                }
+                _playlistLockCount--;
+            }
+        }
+
+
+        public void UpdatePlaylist()
+        {
+            if (_playlistLockCount <= 0 && (_playlist is null || _isPlaylistDirty || _playlist?.Path != this.SelectedItem))
+            {
+                if (!_isPlaylistDirty && _playlist != null)
+                {
+                    _playlist.Flush();
+                }
+
+                SetPlaylist(LoadPlaylist(this.SelectedItem));
+                _isPlaylistDirty = false;
+            }
+        }
+
+        private Playlist LoadPlaylist(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+            {
+                return Playlist.Dummy;
+            }
+
+            bool isCreateNewFile = path != DefaultPlaylist;
+            return Playlist.Load(path, isCreateNewFile);
+        }
+
+        public void Reload(string path)
+        {
+            LocalDebug.WriteLine($"Path={path}");
+
+            var reloadPath = GetReloadPlaylistPath(path);
+
+            if (SelectedItem != reloadPath)
+            {
+                SelectedItem = reloadPath;
+                return;
+            }
+
+            if (!_playlist.FileStamp.IsLatest())
+            {
+                ReloadPlaylist();
+            }
+        }
+
+        public void ReloadPlaylist()
+        {
+            if (this.SelectedItem == _playlist.Path)
+            {
+                SetPlaylist(LoadPlaylist(this.SelectedItem));
+                _isPlaylistDirty = false;
+            }
+        }
+
+        /// <summary>
+        /// プレイリストの状態をリフレッシュ
+        /// </summary>
+        /// <remarks>
+        /// インポート後に呼ばれる
+        /// </remarks>
+        public void Refresh()
+        {
+            PlaylistHub.Current.UpdatePlaylistCollection();
+            PlaylistHub.Current.ReloadPlaylist();
+            Refreshed?.Invoke(this, EventArgs.Empty);
+        }
+
+        /// <summary>
+        /// 再読み込みするプレイリストのパスを決定する。
+        /// </summary>
+        /// <param name="path">現在のプレイリストが存在しないときの代替。ファイル名が変更されたとき用</param>
+        /// <returns></returns>
+        private string GetReloadPlaylistPath(string path)
+        {
+            if (FileIO.FileExists(SelectedItem))
+            {
+                return SelectedItem;
+            }
+            if (FileIO.FileExists(path))
+            {
+                return path;
+            }
+            return DefaultPlaylist;
+        }
+
+        private void SetPlaylist(Playlist value)
+        {
+            if (_playlist == value) return;
+
+            DetachPlaylistEvents(_playlist);
+            _playlist.ClearCache();
+            _playlist = value;
+            AttachPlaylistEvents(_playlist);
+
+            OnPropertyChanged(nameof(Playlist));
+            PlaylistCollectionChanged?.Invoke(this, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
+        }
+
+        private void AttachPlaylistEvents(Playlist playlist)
+        {
+            playlist.CollectionChanged += Playlist_CollectionChanged;
+            playlist.ItemRenamed += Playlist_ItemRenamed;
+            playlist.Saved += Playlist_Saved;
+        }
+
+        private void DetachPlaylistEvents(Playlist playlist)
+        {
+            playlist.CollectionChanged -= Playlist_CollectionChanged;
+            playlist.ItemRenamed -= Playlist_ItemRenamed;
+            playlist.Saved -= Playlist_Saved;
+        }
+
+        public void Flush()
+        {
+            _playlist.Flush();
+        }
+
+        public void CreateNew()
+        {
+            if (string.IsNullOrEmpty(NewPlaylist))
+            {
+                new MessageDialog(TextResources.GetString("Word.Error"), TextResources.GetString("PlaylistErrorDialog.FolderIsNotSet")).ShowDialog();
+                return;
+            }
+
+            var newPath = FileIO.CreateUniquePath(NewPlaylist);
+            SelectedItem = newPath;
+        }
+
+        public void Open()
+        {
+            var dialog = new OpenFileDialog();
+            dialog.Filter = "NeeView Playlist|*.nvpls|All|*.*";
+
+            if (dialog.ShowDialog(App.Current.MainWindow) == true)
+            {
+                SelectedItem = dialog.FileName;
+            }
+        }
+
+        public bool CanDelete()
+        {
+            return SelectedItem != null && SelectedItem != DefaultPlaylist;
+        }
+
+        public async Task DeleteAsync()
+        {
+            if (!CanDelete()) return;
+            if (!FileIO.FileExists(SelectedItem)) return;
+
+            var entry = ArchiveEntryUtility.CreateTemporaryEntry(SelectedItem);
+            bool isSucceed = await ConfirmFileIO.DeleteAsync(entry, TextResources.GetString("Playlist.DeleteDialog.Title"), null);
+            if (isSucceed)
+            {
+                SelectedItem = DefaultPlaylist;
+            }
+        }
+
+        public string SelectedItemName
+        {
+            get => Path.GetFileNameWithoutExtension(SelectedItem);
+            set => Rename(value, false);
+        }
+
+        public bool CanRename()
+        {
+            return _playlist.CanRename();
+        }
+
+        public bool Rename(string newName, bool useErrorDialog = true)
+        {
+            if (_playlist.Rename(newName, useErrorDialog))
+            {
+                SelectedItem = _playlist.Path;
+                return true;
+            }
+
+            return false;
+        }
+
+        public void OpenAsBook()
+        {
+            _playlist.Flush();
+            BookHub.Current.RequestLoad(this, SelectedItem, null, BookLoadOption.IsBook, true);
+        }
+
+        public string GetNextPlaylist(int offset)
+        {
+            Debug.Assert(-1 <= offset || offset <= 1);
+
+            if (_playlistCollection is null || _playlistCollection.Count == 0)
+            {
+                return "";
+            }
+
+            var items = _playlistCollection.OfType<string>().ToList();
+            if (items.Count == 0)
+            {
+                return "";
+            }
+
+            int index = (items.IndexOf(SelectedItem) + items.Count + offset) % items.Count;
+            return items[index];
+        }
+
+        /// <summary>
+        /// すべてのプレイリストの項目のパスを一括変更
+        /// </summary>
+        /// <param name="src"></param>
+        /// <param name="dst"></param>
+        public void RenameItemPathRecursive(string src, string dst)
+        {
+            LocalDebug.WriteLine($"Begin: src={src}, dst={dst}");
+
+            // 現在のプレイリストの名前変更
+            _playlist.RenamePathRecursive(src, dst);
+
+            //_playlist.Flush();
+
+            UpdatePlaylistCollection();
+
+            var files = _playlistCollection.OfType<string>().Where(e => string.Compare(e, _playlist.Path, StringComparison.OrdinalIgnoreCase) != 0);
+            foreach (var file in files)
+            {
+                try
+                {
+                    using (ProcessLock.Lock())
+                    {
+                        var playlist = PlaylistSourceEditor.Create(file);
+                        playlist?.RenamePathRecursive(src, dst);
+                        playlist?.Save();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // できるだけ編集できればよいので例外はスルー
+                    Debug.WriteLine(ex);
+                }
+            }
+
+            LocalDebug.WriteLine($"End");
+        }
+
+
+        /// <summary>
+        /// すべてのプレイリストの項目をファイル追跡に登録
+        /// </summary>
+        /// <param name="src"></param>
+        /// <param name="dst"></param>
+        public void AddAllPlaylistToFileResolver()
+        {
+            _playlist.Flush();
+            UpdatePlaylistCollection();
+
+            var files = _playlistCollection.OfType<string>();
+            foreach (var file in files)
+            {
+                ProcessJobEngine.Current.AddJob($"Processing Playlist: {LoosePath.GetFileName(file)}",
+                    () =>
+                    {
+                        try
+                        {
+                            PlaylistSourceTools.AddToFileResolver(file);
+                        }
+                        catch (Exception ex)
+                        {
+                            // できるだけ登録できればよいので例外はスルー
+                            Debug.WriteLine(ex);
+                        }
+                    });
+            }
+
+            LocalDebug.WriteLine($"End");
+        }
+
+        #region Playlist Controls
+
+        public async Task DeleteInvalidItemsAsync()
+        {
+            await PlaylistService.DeleteInvalidItemsAsync(_playlist, CancellationToken.None);
+        }
+
+        public void SortItems()
+        {
+            _playlist.Sort();
+        }
+
+        #endregion
+    }
+}

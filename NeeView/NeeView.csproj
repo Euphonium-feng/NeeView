@@ -1,0 +1,208 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="..\NeeView.props" />
+  
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWPF>true</UseWPF>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ApplicationManifest>App.manifest</ApplicationManifest>
+    <ApplicationIcon>Resources\App.ico</ApplicationIcon>
+    <Platforms>x64</Platforms>
+    <Platform>x64</Platform>
+    <PlatformTarget>x64</PlatformTarget>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <Configurations>Debug;Release;Remote</Configurations>
+    <CETCompat>false</CETCompat>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <Description>Image viewer</Description>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)'=='Remote'">
+    <OutputPath>C:\NeeLaboratory\NeeView\Debug\</OutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Remove="Languages\ConvertRestext.ps1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>NeeView.UnitTest</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+  
+  <ItemGroup>
+    <PackageReference Include="bblanchon.PDFium.Win32" Version="149.0.7825" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="Generator.Equals" Version="4.0.1" />
+    <PackageReference Include="H.NotifyIcon.Wpf" Version="2.4.1" />
+    <PackageReference Include="Jint" Version="4.9.3" />
+    <PackageReference Include="MetadataExtractor" Version="2.9.3" />
+    <PackageReference Include="Microsoft.Windows.CsWin32" Version="0.3.287">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Xaml.Behaviors.Wpf" Version="1.1.142" />
+    <PackageReference Include="PdfiumViewer.Updated" Version="2.14.5" />
+    <PackageReference Include="PhotoSauce.MagicScaler" Version="0.15.0" />
+    <PackageReference Include="Vortice.D3DCompiler" Version="3.8.3" />
+    <PackageReference Include="Vortice.Direct3D11" Version="3.8.3" />
+    <PackageReference Include="SharpVectors" Version="1.8.5" />
+    <PackageReference Include="System.Data.SQLite.Core" Version="1.0.113.7" />
+    <PackageReference Include="VirtualizingWrapPanel" Version="2.5.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="Microsoft.Expression.Effects, Version=4.5.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>Expression.Blend.NETFramework\Microsoft.Expression.Effects.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AnimatedImage\AnimatedImage.Wpf\AnimatedImage.Wpf.csproj" />
+    <ProjectReference Include="..\NeeLaboratory.IO.Search\NeeLaboratory.IO.Search\NeeLaboratory.IO.Search.csproj" />
+    <ProjectReference Include="..\NeeLaboratory.Remote\NeeLaboratory.Remote.csproj" />
+    <ProjectReference Include="..\NeeLaboratory.Runtime\NeeLaboratory.Runtime.csproj" />
+    <ProjectReference Include="..\NeeLaboratory.SourceGenerator\NeeLaboratory.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\NeeView.Susie\NeeView.Susie.csproj" />
+    <ProjectReference Include="..\SevenZipSharp\SevenZip\SevenZip.csproj">
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </ProjectReference>
+    <ProjectReference Include="..\Vlc.DotNet\src\Vlc.DotNet.Wpf\Vlc.DotNet.Wpf.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="NeeView\Effects\Shaders\Colorize.ps" />
+    <Resource Include="NeeView\Effects\Shaders\ColorSelectEffect.ps" />
+    <Resource Include="NeeView\Effects\Shaders\HsvEffect.ps" />
+    <Resource Include="NeeView\Effects\Shaders\LevelEffect.ps" />
+    <Resource Include="Languages\shared.restext" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Resources\App.ico" />
+    <Resource Include="Resources\Scripts\BookmarkFolderNodeAccessor.Add.Example.nvjs" />
+    <Resource Include="Resources\Scripts\BookshelfPanelAccessor.Example.nvjs" />
+    <Resource Include="Resources\Scripts\CommandAccessor.Execute.Example.nvjs" />
+    <Resource Include="Resources\Scripts\CommandAccessor.MouseGesture.Example.nvjs" />
+    <Resource Include="Resources\Scripts\CommandAccessor.Parameter.Example.nvjs" />
+    <Resource Include="Resources\Scripts\CommandAccessor.Patch.Example.nvjs" />
+    <Resource Include="Resources\Scripts\CommandAccessor.ShortCutKey.Example.nvjs" />
+    <Resource Include="Resources\Scripts\CommandAccessor.TouchGesture.Example.nvjs" />
+    <Resource Include="Resources\Scripts\CommandHost.Command.Example.nvjs" />
+    <Resource Include="Resources\Scripts\CommandHost.Config.Example.nvjs" />
+    <Resource Include="Resources\Scripts\CommandHost.ShowDialog.Example.nvjs" />
+    <Resource Include="Resources\Scripts\CommandHost.Values.Example.nvjs" />
+    <Resource Include="Resources\Scripts\JavaScriptEngine.ExecuteFile.Example.nvjs" />
+    <Resource Include="Resources\Scripts\OnBookLoaded.Media.nvjs" />
+    <Resource Include="Resources\Scripts\OnBookLoaded.ReadOrder.nvjs" />
+    <Resource Include="Resources\Scripts\OpenMsPaint.nvjs" />
+    <Resource Include="Resources\Scripts\OpenNeeView.nvjs" />
+    <Resource Include="Resources\Scripts\PageAccessor.Example.nvjs" />
+    <Resource Include="Resources\Scripts\QuickAccessFolderNodeAccessor.Add.Example.nvjs" />
+    <Resource Include="Resources\Scripts\QuickAccessFolderNodeAccessor.Insert.Example.nvjs" />
+    <Resource Include="Resources\Scripts\ToggleFullScreenAndMediaPlay.nvjs" />
+    <Resource Include="Resources\Scripts\ToggleUnsharpMask.nvjs" />
+    <Resource Include="Resources\Scripts\ViewPageAccessor.Example.nvjs" />
+    <Resource Include="Resources\Style.css" />
+    <Resource Include="Resources\SplashScreen.png" />
+    <Resource Include="Resources\Media.png" />
+    <Resource Include="Resources\Empty.png" />
+    <Resource Include="Resources\Scripts\Sample.nvjs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="NeeView.settings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Libraries\x64\vcruntime140.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Libraries\x64\libsharpyuv.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Libraries\x64\libwebp.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Libraries\x64\libwebpdemux.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Libraries\x64\MediaInfo.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Libraries\x64\NeeView.Interop.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\.editorconfig" Link=".editorconfig" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\effects\**\*.hlsl;..\effects\**\*.hlsli;..\effects\**\*.dds" Link="effects\%(RecursiveDir)%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="Languages\en.restext">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Languages\es.restext">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Languages\it-IT.restext">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Languages\ja.restext">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Languages\ko.restext">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Languages\pt-BR.restext">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Languages\ru.restext">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Languages\zh-Hans.restext">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Languages\zh-Hant.restext">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Libraries\Book.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Libraries\File.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Libraries\Themes\CustomThemeTemplate.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Libraries\Themes\DarkMonochromeTheme.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Libraries\Themes\DarkTheme.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Libraries\Themes\HighContrastTheme.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Libraries\Themes\LightMonochromeTheme.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Libraries\Themes\LightTheme.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+ 
+</Project>

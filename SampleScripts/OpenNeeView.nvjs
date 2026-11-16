@@ -1,0 +1,12 @@
+﻿// @name Open in NeeView
+// @description Open the display page in a new NeeView window.
+
+nv.Command.SaveSetting.Execute() // Save to make the settings the same.
+
+param = {
+    "Command": "$NeeView", // A special notation indicating NeeView's own path
+    "Parameter": "-n \"$File\"",
+    "MultiPagePolicy": "Once",
+    "ArchivePolicy": "SendArchivePath"
+}
+nv.Command.OpenExternalApp.Patch(param).Execute()

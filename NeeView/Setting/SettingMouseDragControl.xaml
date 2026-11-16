@@ -1,0 +1,90 @@
+﻿<UserControl x:Class="NeeView.Setting.SettingMouseDragControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:b="http://schemas.microsoft.com/xaml/behaviors"
+             xmlns:local="clr-namespace:NeeView.Setting"
+             xmlns:nv="clr-namespace:NeeView"
+             xmlns:nwc="clr-namespace:NeeView.Windows.Controls"
+             xmlns:properties="clr-namespace:NeeView.Properties"
+             mc:Ignorable="d" 
+             d:DesignHeight="300" d:DesignWidth="300">
+
+    <UserControl.Resources>
+        <DrawingImage x:Key="ic_setting_24px">
+            <DrawingImage.Drawing>
+                <DrawingGroup>
+                    <GeometryDrawing Brush="Transparent" Geometry="{StaticResource g_rect24x24}" />
+                    <GeometryDrawing Brush="{DynamicResource IconButton.Foreground}" Pen="{x:Null}" Geometry="{StaticResource g_setting_24px}" />
+                </DrawingGroup>
+            </DrawingImage.Drawing>
+        </DrawingImage>
+        
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+        <nv:DragKeyToDisplayStringConverter x:Key="DragKeyToDisplayStringConverter"/>
+    </UserControl.Resources>
+    
+    <Grid x:Name="Root">
+        <Border BorderBrush="{DynamicResource Control.Border}" BorderThickness="1" Margin="5">
+            <DockPanel Margin="2" KeyboardNavigation.TabNavigation="Local">
+
+                <DockPanel DockPanel.Dock="Bottom">
+                    <Grid DockPanel.Dock="Top">
+                        <Button x:Name="ResetDragSettingButton" Content="{properties:TextBinding MouseDragList.Reset}" MinWidth="120" Height="30" Margin="8" Padding="5,0" HorizontalAlignment="Right" Click="ResetDragActionSettingButton_Click" TabIndex="10"/>
+                    </Grid>
+
+                </DockPanel>
+
+                <ListView x:Name="DragActionListView" BorderThickness="0" ItemsSource="{Binding DragActionCollection}" SelectionChanged="DragActionListView_SelectionChanged" TabIndex="1">
+                    <b:Interaction.Behaviors>
+                        <nwc:IgnoreMouseWheelBehavior />
+                    </b:Interaction.Behaviors>
+
+                    <ListView.ItemContainerStyle>
+                        <Style TargetType="ListViewItem" BasedOn="{StaticResource NVListViewItem}" >
+                            <EventSetter Event="MouseDoubleClick" Handler="DragActionListViewItem_MouseDoubleClick"/>
+                            <EventSetter Event="KeyDown" Handler="DragActionListViewItem_KeyDown" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding DragAction.IsLocked}" Value="True">
+                                    <Setter Property="IsEnabled" Value="False"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ListView.ItemContainerStyle>
+
+                    <ListView.View>
+                        <GridView>
+
+                            <GridViewColumn Header="{properties:TextBinding MouseDragList.Header.Command}" >
+                                <GridViewColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal">
+                                            <Grid DockPanel.Dock="Left" Width="20" VerticalAlignment="Center">
+                                                <Button Style="{StaticResource IconButton}" Click="EditCommandParameterButton_Click" Tag="{Binding}" Visibility="{Binding HasParameter, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                    <Image Width="16" Height="16" Source="{StaticResource ic_setting_24px}" />
+                                                </Button>
+                                            </Grid>
+                                            <TextBlock Text="{Binding Header}" TextTrimming="CharacterEllipsis" ToolTipService.ShowOnDisabled="True"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </GridViewColumn.CellTemplate>
+                            </GridViewColumn>
+
+                            <GridViewColumn Header="{properties:TextBinding MouseDragList.Header.Drag}" Width="300" >
+                                <GridViewColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding DragAction.DragKey, Converter={StaticResource DragKeyToDisplayStringConverter}}" TextTrimming="CharacterEllipsis"/>
+                                    </DataTemplate>
+                                </GridViewColumn.CellTemplate>
+                            </GridViewColumn>
+
+                        </GridView>
+                    </ListView.View>
+                </ListView>
+
+            </DockPanel>
+        </Border>
+
+    </Grid>
+</UserControl>
